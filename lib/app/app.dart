@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:music_app/features/splash/splash_screen.dart';
 class RyvoApp extends StatelessWidget {
   const RyvoApp({super.key});
 
@@ -7,17 +7,7 @@ class RyvoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: Center(
-          child: Text(
-            'RYVO',
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
+      home: const SplashScreen(),
     );
   }
 }
