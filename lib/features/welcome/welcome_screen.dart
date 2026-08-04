@@ -1,40 +1,72 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:music_app/features/home/home_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
+  void _goToHome(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 500),
+        reverseTransitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+        const HomeScreen(),
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) {
+          final curve = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          );
+
+          return FadeTransition(
+            opacity: curve,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.08),
+                end: Offset.zero,
+              ).animate(curve),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xff0B0B0F),
+      backgroundColor: Colors.black,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-
               const Spacer(),
 
-              const Icon(
-                Icons.graphic_eq_rounded,
-                size: 90,
-                color: Color(0xff8B5CF6),
+              const Hero(
+                tag: "ryvo_logo",
+                child: Icon(
+                  Icons.graphic_eq_rounded,
+                  size: 95,
+                  color: Color(0xFF8B5CF6),
+                ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 24),
 
               Text(
                 "RYVO",
                 style: GoogleFonts.poppins(
-                  fontSize: 42,
+                  fontSize: 44,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 7,
                   color: Colors.white,
-                  letterSpacing: 6,
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
 
               Text(
                 "Music Reimagined",
@@ -48,34 +80,81 @@ class WelcomeScreen extends StatelessWidget {
 
               SizedBox(
                 width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  child: const Text("Continue with Google"),
+                height: 58,
+                child: ElevatedButton.icon(
+                  onPressed: () => _goToHome(context),
+                  icon: const Icon(
+                    Icons.g_mobiledata,
+                    size: 34,
+                    color: Colors.black,
+                  ),
+                  label: Text(
+                    "Continue with Google",
+                    style: GoogleFonts.poppins(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    elevation: 0,
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 16),
 
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 58,
                 child: OutlinedButton(
-                  onPressed: () {},
-                  child: const Text("Continue as Guest"),
+                  onPressed: () => _goToHome(context),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color: Color(0xFF8B5CF6),
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  child: Text(
+                    "Continue as Guest",
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 28),
 
               Text(
-                "Terms • Privacy",
+                "By continuing you agree to our",
                 style: GoogleFonts.poppins(
                   color: Colors.white38,
+                  fontSize: 12,
                 ),
               ),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 4),
+
+              Text(
+                "Terms of Service • Privacy Policy",
+                style: GoogleFonts.poppins(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+
+              const SizedBox(height: 24),
             ],
           ),
         ),
