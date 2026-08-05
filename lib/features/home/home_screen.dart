@@ -16,6 +16,68 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      bottomSheet: Container(
+        height: 80,
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xff181818),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: ListTile(
+          leading: const CircleAvatar(
+            backgroundColor: Color(0xff8B5CF6),
+            child: Icon(Icons.music_note, color: Colors.white),
+          ),
+          title: Text(
+            "Blinding Lights",
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            "The Weeknd",
+            style: GoogleFonts.poppins(
+              color: Colors.white54,
+              fontSize: 12,
+            ),
+          ),
+          trailing: IconButton(
+            onPressed: () {},
+            icon: const Icon(
+              Icons.play_arrow_rounded,
+              color: Colors.white,
+              size: 34,
+            ),
+          ),
+        ),
+      ),
+
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: const Color(0xff111111),
+        selectedItemColor: const Color(0xff8B5CF6),
+        unselectedItemColor: Colors.white54,
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 0,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_rounded),
+            label: "Home",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search_rounded),
+            label: "Search",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite_rounded),
+            label: "Library",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_rounded),
+            label: "Profile",
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
