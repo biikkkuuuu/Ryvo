@@ -1,37 +1,36 @@
 import 'package:music_app/models/song.dart';
-import 'package:music_app/services/youtube_music_service.dart';
+import 'package:music_app/services/jiosaavn_service.dart';
 
 class MusicRepository {
-  final YouTubeMusicService _service = YouTubeMusicService();
+  final JioSaavnService _service = JioSaavnService();
 
   Future<List<Song>> search(String query) async {
-    await _service.init();
+    final results = await _service.searchSongs(query);
 
-    final List<dynamic> results = await _service.searchSongs(query);
+    return results.map((item) {
+      String artist = "Unknown";
 
-    final List<Song> songs = [];
-
-    for (final item in results) {
-      if (item is Map<String, dynamic>) {
-        songs.add(
-          Song(
-            id: item["videoId"] ?? "",
-            title: item["title"] ?? "",
-            artist: item["artists"] != null &&
-                item["artists"] is List &&
-                item["artists"].isNotEmpty
-                ? item["artists"][0]["name"]
-                : "Unknown",
-            thumbnail: item["thumbnails"] != null &&
-                item["thumbnails"] is List &&
-                item["thumbnails"].isNotEmpty
-                ? item["thumbnails"].last["url"]
-                : "",
-          ),
-        );
+      if (item["artists"] != null &&
+          item["artists"]["primary"] != null &&
+          item["artists"]["primary"] is List &&
+          item["artists"]["primary"].isNotEmpty) {
+        artist = item["artists"]["primary"][0]["name"] ?? "Unknown";
       }
-    }
 
-    return songs;
+      String image = "";
+
+      if (item["image"] != null &&
+          item["image"] is List &&
+          item["image"].isNotEmpty) {
+        image = item["image"].last["url"] ?? "";
+      }
+
+      return Song(
+        id: item["id"] ?? "",
+        title: item["name"] ?? "",
+        artist: artist,
+        thumbnail: image,
+      );
+    }).toList();
   }
 }

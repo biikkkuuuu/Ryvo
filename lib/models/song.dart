@@ -12,20 +12,37 @@ class Song {
   });
 
   factory Song.fromJson(Map<String, dynamic> json) {
+    String artist = "Unknown";
+
+    if (json["artists"] != null &&
+        json["artists"]["primary"] != null &&
+        json["artists"]["primary"] is List &&
+        json["artists"]["primary"].isNotEmpty) {
+      artist = json["artists"]["primary"][0]["name"] ?? "Unknown";
+    }
+
+    String image = "";
+
+    if (json["image"] != null &&
+        json["image"] is List &&
+        json["image"].isNotEmpty) {
+      image = json["image"].last["url"] ?? "";
+    }
+
     return Song(
-      id: json['videoId'] ?? '',
-      title: json['title'] ?? '',
-      artist: json['artist'] ?? '',
-      thumbnail: json['thumbnail'] ?? '',
+      id: json["id"] ?? "",
+      title: json["name"] ?? "",
+      artist: artist,
+      thumbnail: image,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'videoId': id,
-      'title': title,
-      'artist': artist,
-      'thumbnail': thumbnail,
+      "id": id,
+      "name": title,
+      "artist": artist,
+      "thumbnail": thumbnail,
     };
   }
 }
