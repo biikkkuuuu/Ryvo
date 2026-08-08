@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/services/audio_service.dart';
+import 'package:music_app/models/song.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String title;
@@ -8,12 +11,17 @@ class PlayerScreen extends StatefulWidget {
   final String image;
   final String songId;
 
+  final List<Song> playlist;
+  final int currentIndex;
+
   const PlayerScreen({
     super.key,
     required this.title,
     required this.artist,
     required this.image,
-  required this.songId,
+    required this.songId,
+    required this.playlist,
+    required this.currentIndex,
   });
 
   @override
@@ -21,248 +29,876 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-final AudioService audioService = AudioService();
+  final AudioService audioService = AudioService();
 
-bool isPlaying = false;
-Duration currentPosition = Duration.zero;
-Duration totalDuration = Duration.zero;
+  late int currentIndex;
 
-@override
-void initState() {
-  super.initState();
+  bool isPlaying = false;
+  bool isLoadingSong = false;
 
-  print("Player Screen Opened");
+  bool isShuffle = false;
+  bool isFavorite = false;
 
-  audioService.playSong(widget.songId);
+  // 0 = OFF
+  // 1 = REPEAT ALL
+  // 2 = REPEAT ONE
+  int repeatMode = 0;
 
-  isPlaying = true;
+  Duration currentPosition = Duration.zero;
+  Duration totalDuration = Duration.zero;
 
-  audioService.positionStream.listen((position) {
-    if (!mounted) return;
+  DateTime lastPlaybackTap =
+  DateTime.fromMillisecondsSinceEpoch(0);
 
-    setState(() {
-      currentPosition = position;
+  bool completionHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    currentIndex = widget.currentIndex;
+
+    startSong();
+
+    // ==========================================
+    // PLAYER STATE
+    // ==========================================
+
+    audioService.audioPlayer.playerStateStream.listen((state) {
+      if (!mounted) return;
+
+      setState(() {
+        isPlaying = state.playing;
+      });
+
+      if (state.processingState.toString().contains("completed")) {
+        if (!completionHandled) {
+          completionHandled = true;
+          handleSongCompleted();
+        }
+      } else {
+        completionHandled = false;
+      }
     });
-  });
 
-  audioService.durationStream.listen((duration) {
-    if (!mounted) return;
+    // ==========================================
+    // POSITION
+    // ==========================================
 
-    setState(() {
-      totalDuration = duration ?? Duration.zero;
+    audioService.positionStream.listen((position) {
+      if (!mounted) return;
+
+      setState(() {
+        currentPosition = position;
+      });
     });
-  });
-}
 
-@override
-void dispose() {
-audioService.dispose();
-super.dispose();
-}
+    // ==========================================
+    // DURATION
+    // ==========================================
 
-@override
-Widget build(BuildContext context) {
-return Scaffold(
-backgroundColor: Colors.black,
+    audioService.durationStream.listen((duration) {
+      if (!mounted) return;
 
-appBar: AppBar(
-backgroundColor: Colors.black,
-elevation: 0,
-centerTitle: true,
-title: Text(
-"Now Playing",
-style: GoogleFonts.poppins(
-color: Colors.white,
-fontWeight: FontWeight.w600,
-),
-),
-),
+      if (duration != null && duration > Duration.zero) {
+        setState(() {
+          totalDuration = duration;
+          isLoadingSong = false;
+        });
+      }
+    });
+  }
 
-body: SafeArea(
-child: SingleChildScrollView(
-child: Padding(
-padding: const EdgeInsets.all(24),
-child: Column(
-children: [
-const SizedBox(height: 20),
+  // ==========================================
+  // START SONG
+  // ==========================================
 
-  SizedBox(
-    width: MediaQuery.of(context).size.width * 0.75,
-    height: MediaQuery.of(context).size.width * 0.75,
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(25),
-      child: Image.network(
-        widget.image,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
-          return Container(
-            color: const Color(0xff181818),
-            child: const Icon(
-              Icons.music_note,
-              color: Colors.white,
-              size: 80,
-            ),
-          );
-        },
-      ),
-    ),
-  ),
-
-const SizedBox(height: 30),
-
-Text(
-widget.title,
-textAlign: TextAlign.center,
-maxLines: 2,
-overflow: TextOverflow.ellipsis,
-style: GoogleFonts.poppins(
-color: Colors.white,
-fontSize: 24,
-fontWeight: FontWeight.bold,
-),
-),
-
-const SizedBox(height: 10),
-
-Text(
-widget.artist,
-style: GoogleFonts.poppins(
-color: Colors.white54,
-fontSize: 18,
-),
-),
-
-const SizedBox(height: 40),
-
-  Slider(
-    value: currentPosition.inSeconds
-        .toDouble()
-        .clamp(
-      0,
-      totalDuration.inSeconds == 0
-          ? 1
-          : totalDuration.inSeconds.toDouble(),
-    ),
-    min: 0,
-    max: totalDuration.inSeconds == 0
-        ? 1
-        : totalDuration.inSeconds.toDouble(),
-    activeColor: const Color(0xff8B5CF6),
-    inactiveColor: Colors.white24,
-    onChanged: (value) async {
-      await audioService.seek(
-        Duration(seconds: value.toInt()),
+  Future<void> startSong() async {
+    try {
+      await audioService.playSong(
+        widget.playlist[currentIndex].id,
       );
-    },
-  ),
+    } catch (e) {
+      debugPrint("Start Song Error: $e");
+    }
+  }
 
-  Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(
-        "${currentPosition.inMinutes}:${(currentPosition.inSeconds % 60).toString().padLeft(2, '0')}",
-        style: GoogleFonts.poppins(
-          color: Colors.white54,
-        ),
-      ),
-      Text(
-        "${totalDuration.inMinutes}:${(totalDuration.inSeconds % 60).toString().padLeft(2, '0')}",
-        style: GoogleFonts.poppins(
-          color: Colors.white54,
-        ),
-      ),
-    ],
-  ),
+  @override
+  void dispose() {
+    audioService.dispose();
+    super.dispose();
+  }
 
-const SizedBox(height: 30),                Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [
+  // ==========================================
+  // DECODE HTML
+  // ==========================================
 
-      IconButton(
-        onPressed: () {},
-        icon: const Icon(
-          Icons.skip_previous_rounded,
-          color: Colors.white,
-          size: 42,
-        ),
-      ),
+  String decodeHtml(String text) {
+    return text
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#34;', '"')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&#38;', '&')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&#x27;', "'")
+        .replaceAll('&#x2F;', '/');
+  }
 
-      Container(
-        width: 80,
-        height: 80,
-        decoration: const BoxDecoration(
-          color: Color(0xff8B5CF6),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          onPressed: () async {
-            if (isPlaying) {
-              await audioService.pause();
+  // ==========================================
+  // FORMAT TIME
+  // ==========================================
 
-              setState(() {
-                isPlaying = false;
-              });
-            } else {
-              await audioService.resume();
+  String formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
 
-              setState(() {
-                isPlaying = true;
-              });
-            }
+    return "$minutes:${seconds.toString().padLeft(2, '0')}";
+  }
+
+  // ==========================================
+  // PLAY / PAUSE
+  // ==========================================
+
+  Future<void> togglePlayPause() async {
+    final now = DateTime.now();
+
+    if (now.difference(lastPlaybackTap).inMilliseconds < 300) {
+      return;
+    }
+
+    lastPlaybackTap = now;
+
+    try {
+      if (audioService.audioPlayer.playing) {
+        await audioService.pause();
+      } else {
+        await audioService.resume();
+      }
+    } catch (e) {
+      debugPrint("Play Pause Error: $e");
+    }
+  }
+
+  // ==========================================
+  // NEXT SONG
+  // ==========================================
+
+  Future<void> playNext() async {
+    if (widget.playlist.isEmpty || isLoadingSong) {
+      return;
+    }
+
+    int nextIndex;
+
+    if (isShuffle) {
+      if (widget.playlist.length <= 1) {
+        return;
+      }
+
+      final random = Random();
+
+      do {
+        nextIndex = random.nextInt(
+          widget.playlist.length,
+        );
+      } while (nextIndex == currentIndex);
+    } else {
+      if (currentIndex >=
+          widget.playlist.length - 1) {
+        if (repeatMode == 1) {
+          nextIndex = 0;
+        } else {
+          return;
+        }
+      } else {
+        nextIndex = currentIndex + 1;
+      }
+    }
+
+    currentIndex = nextIndex;
+
+    await playCurrentSong();
+  }
+
+  // ==========================================
+  // PREVIOUS SONG
+  // ==========================================
+
+  Future<void> playPrevious() async {
+    if (widget.playlist.isEmpty || isLoadingSong) {
+      return;
+    }
+
+    if (currentPosition.inSeconds > 3) {
+      await audioService.seek(Duration.zero);
+      return;
+    }
+
+    if (currentIndex <= 0) {
+      if (repeatMode == 1) {
+        currentIndex =
+            widget.playlist.length - 1;
+
+        await playCurrentSong();
+      } else {
+        await audioService.seek(Duration.zero);
+      }
+
+      return;
+    }
+
+    currentIndex--;
+
+    await playCurrentSong();
+  }
+
+  // ==========================================
+  // PLAY CURRENT SONG
+  // ==========================================
+
+  Future<void> playCurrentSong() async {
+    final song = widget.playlist[currentIndex];
+
+    setState(() {
+      isLoadingSong = true;
+      currentPosition = Duration.zero;
+      totalDuration = Duration.zero;
+      isPlaying = false;
+      completionHandled = false;
+    });
+
+    try {
+      await audioService.playSong(song.id);
+    } catch (e) {
+      debugPrint("Song Change Error: $e");
+
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingSong = false;
+      });
+    }
+  }
+
+  // ==========================================
+  // SONG COMPLETED
+  // ==========================================
+
+  Future<void> handleSongCompleted() async {
+    if (!mounted || widget.playlist.isEmpty) {
+      return;
+    }
+
+    // REPEAT ONE
+    if (repeatMode == 2) {
+      await playCurrentSong();
+      return;
+    }
+
+    // SHUFFLE
+    if (isShuffle) {
+      await playNext();
+      return;
+    }
+
+    // NORMAL NEXT
+    if (currentIndex <
+        widget.playlist.length - 1) {
+      currentIndex++;
+      await playCurrentSong();
+      return;
+    }
+
+    // REPEAT ALL
+    if (repeatMode == 1) {
+      currentIndex = 0;
+      await playCurrentSong();
+    }
+  }
+
+  // ==========================================
+  // SHUFFLE
+  // ==========================================
+
+  void toggleShuffle() {
+    setState(() {
+      isShuffle = !isShuffle;
+    });
+  }
+
+  // ==========================================
+  // FAVORITE
+  // ==========================================
+
+  void toggleFavorite() {
+    setState(() {
+      isFavorite = !isFavorite;
+    });
+  }
+
+  // ==========================================
+  // REPEAT
+  // ==========================================
+
+  void toggleRepeat() {
+    setState(() {
+      repeatMode++;
+
+      if (repeatMode > 2) {
+        repeatMode = 0;
+      }
+    });
+  }
+
+  // ==========================================
+  // REPEAT ICON
+  // ==========================================
+
+  IconData get repeatIcon {
+    if (repeatMode == 2) {
+      return Icons.repeat_one_rounded;
+    }
+
+    return Icons.repeat_rounded;
+  }
+
+  // ==========================================
+  // BUILD
+  // ==========================================
+
+  @override
+  Widget build(BuildContext context) {
+    final song = widget.playlist[currentIndex];
+
+    final screenHeight =
+        MediaQuery.of(context).size.height;
+
+    double albumSize;
+
+    if (screenHeight < 700) {
+      albumSize = screenHeight * 0.39;
+    } else if (screenHeight < 800) {
+      albumSize = screenHeight * 0.42;
+    } else {
+      albumSize = screenHeight * 0.46;
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+
+      // ========================================
+      // APP BAR
+      // ========================================
+
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        centerTitle: true,
+
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
           },
-          icon: Icon(
-            isPlaying
-                ? Icons.pause_rounded
-                : Icons.play_arrow_rounded,
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
             color: Colors.white,
-            size: 42,
+            size: 22,
+          ),
+        ),
+
+        title: Text(
+          "Now Playing",
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
           ),
         ),
       ),
 
-      IconButton(
-        onPressed: () {},
-        icon: const Icon(
-          Icons.skip_next_rounded,
-          color: Colors.white,
-          size: 42,
+      // ========================================
+      // BODY
+      // ========================================
+
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            22,
+            8,
+            22,
+            10,
+          ),
+
+          child: Column(
+            children: [
+              // ==================================
+              // ALBUM ART
+              // ==================================
+
+              SizedBox(
+                width: albumSize,
+                height: albumSize,
+
+                child: ClipRRect(
+                  borderRadius:
+                  BorderRadius.circular(28),
+
+                  child: Image.network(
+                    song.thumbnail,
+
+                    fit: BoxFit.cover,
+
+                    errorBuilder: (_, __, ___) {
+                      return Container(
+                        color:
+                        const Color(0xff181818),
+
+                        child: const Icon(
+                          Icons.music_note_rounded,
+                          color: Colors.white54,
+                          size: 70,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // ==================================
+              // SONG TITLE
+              // ==================================
+
+              Text(
+                decodeHtml(song.title),
+
+                textAlign: TextAlign.center,
+
+                maxLines: 2,
+
+                overflow:
+                TextOverflow.ellipsis,
+
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+
+                  fontSize:
+                  screenHeight < 700
+                      ? 20
+                      : 22,
+
+                  fontWeight: FontWeight.w700,
+
+                  height: 1.2,
+                ),
+              ),
+
+              const SizedBox(height: 5),
+
+              // ==================================
+              // ARTIST
+              // ==================================
+
+              Text(
+                decodeHtml(song.artist),
+
+                textAlign: TextAlign.center,
+
+                maxLines: 1,
+
+                overflow:
+                TextOverflow.ellipsis,
+
+                style: GoogleFonts.poppins(
+                  color: Colors.white54,
+                  fontSize: 15,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // ==================================
+              // PROGRESS
+              // ==================================
+
+              if (isLoadingSong)
+                const SizedBox(
+                  height: 38,
+
+                  child: Center(
+                    child: SizedBox(
+                      width: 17,
+                      height: 17,
+
+                      child:
+                      CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color:
+                        Color(0xff8B5CF6),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliderTheme(
+                  data:
+                  SliderTheme.of(context)
+                      .copyWith(
+                    trackHeight: 4,
+
+                    thumbShape:
+                    const RoundSliderThumbShape(
+                      enabledThumbRadius: 6,
+                    ),
+
+                    overlayShape:
+                    const RoundSliderOverlayShape(
+                      overlayRadius: 12,
+                    ),
+                  ),
+
+                  child: Slider(
+                    value: currentPosition
+                        .inSeconds
+                        .toDouble()
+                        .clamp(
+                      0,
+                      totalDuration
+                          .inSeconds ==
+                          0
+                          ? 1
+                          : totalDuration
+                          .inSeconds
+                          .toDouble(),
+                    ),
+
+                    min: 0,
+
+                    max: totalDuration
+                        .inSeconds ==
+                        0
+                        ? 1
+                        : totalDuration
+                        .inSeconds
+                        .toDouble(),
+
+                    activeColor:
+                    const Color(0xff8B5CF6),
+
+                    inactiveColor:
+                    Colors.white24,
+
+                    onChanged:
+                        (value) async {
+                      try {
+                        await audioService.seek(
+                          Duration(
+                            seconds:
+                            value.toInt(),
+                          ),
+                        );
+                      } catch (e) {
+                        debugPrint(
+                          "Seek Error: $e",
+                        );
+                      }
+                    },
+                  ),
+                ),
+
+              // ==================================
+              // TIME
+              // ==================================
+
+              Padding(
+                padding:
+                const EdgeInsets.symmetric(
+                  horizontal: 4,
+                ),
+
+                child: Row(
+                  mainAxisAlignment:
+                  MainAxisAlignment
+                      .spaceBetween,
+
+                  children: [
+                    Text(
+                      formatDuration(
+                        currentPosition,
+                      ),
+
+                      style:
+                      GoogleFonts.poppins(
+                        color:
+                        Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+
+                    Text(
+                      formatDuration(
+                        totalDuration,
+                      ),
+
+                      style:
+                      GoogleFonts.poppins(
+                        color:
+                        Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              // ==================================
+              // MAIN CONTROLS
+              // ==================================
+
+              Row(
+                mainAxisAlignment:
+                MainAxisAlignment
+                    .spaceEvenly,
+
+                children: [
+                  // PREVIOUS
+                  IconButton(
+                    onPressed:
+                    isLoadingSong
+                        ? null
+                        : playPrevious,
+
+                    icon: const Icon(
+                      Icons
+                          .skip_previous_rounded,
+
+                      color: Colors.white,
+
+                      size: 42,
+                    ),
+                  ),
+
+                  // PLAY / PAUSE
+                  Container(
+                    width: 78,
+                    height: 78,
+
+                    decoration:
+                    const BoxDecoration(
+                      color:
+                      Color(0xff8B5CF6),
+
+                      shape: BoxShape.circle,
+                    ),
+
+                    child: IconButton(
+                      onPressed:
+                      isLoadingSong
+                          ? null
+                          : togglePlayPause,
+
+                      icon: Icon(
+                        isPlaying
+                            ? Icons
+                            .pause_rounded
+                            : Icons
+                            .play_arrow_rounded,
+
+                        color: Colors.white,
+
+                        size: 42,
+                      ),
+                    ),
+                  ),
+
+                  // NEXT
+                  IconButton(
+                    onPressed:
+                    isLoadingSong
+                        ? null
+                        : playNext,
+
+                    icon: const Icon(
+                      Icons
+                          .skip_next_rounded,
+
+                      color: Colors.white,
+
+                      size: 42,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              // ==================================
+              // SECONDARY CONTROLS
+              // ==================================
+
+              Row(
+                mainAxisAlignment:
+                MainAxisAlignment.center,
+
+                children: [
+                  // SHUFFLE
+                  _premiumControlButton(
+                    icon:
+                    Icons.shuffle_rounded,
+
+                    label: isShuffle
+                        ? "Shuffle"
+                        : null,
+
+                    active: isShuffle,
+
+                    onTap: toggleShuffle,
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // FAVORITE
+                  _premiumControlButton(
+                    icon: isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons
+                        .favorite_border_rounded,
+
+                    label: isFavorite
+                        ? "Liked"
+                        : null,
+
+                    active: isFavorite,
+
+                    onTap: toggleFavorite,
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // REPEAT
+                  _premiumControlButton(
+                    icon: repeatIcon,
+
+                    label: repeatMode == 1
+                        ? "Repeat All"
+                        : repeatMode == 2
+                        ? "Repeat One"
+                        : null,
+
+                    active: repeatMode != 0,
+
+                    onTap: toggleRepeat,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 6),
+            ],
+          ),
         ),
       ),
-    ],
-  ),
+    );
+  }
 
-  const SizedBox(height: 35),
+  // ==========================================
+  // PREMIUM SECONDARY BUTTON
+  // ==========================================
 
-  Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: const [
+  Widget _premiumControlButton({
+    required IconData icon,
+    required String? label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
 
-      Icon(
-        Icons.shuffle_rounded,
-        color: Colors.white54,
-        size: 28,
+      child: AnimatedContainer(
+        duration:
+        const Duration(milliseconds: 220),
+
+        curve: Curves.easeOut,
+
+        padding: EdgeInsets.symmetric(
+          horizontal:
+          label != null ? 14 : 0,
+        ),
+
+        width:
+        label != null ? 105 : 52,
+
+        height: 52,
+
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xff8B5CF6)
+              .withOpacity(0.16)
+              : const Color(0xff151515),
+
+          borderRadius:
+          BorderRadius.circular(18),
+
+          border: Border.all(
+            color: active
+                ? const Color(0xff8B5CF6)
+                : Colors.white12,
+
+            width: 1,
+          ),
+        ),
+
+        child: Row(
+          mainAxisAlignment:
+          MainAxisAlignment.center,
+
+          mainAxisSize: MainAxisSize.min,
+
+          children: [
+            Icon(
+              icon,
+
+              color: active
+                  ? const Color(0xffA87CFF)
+                  : Colors.white60,
+
+              size: 23,
+            ),
+
+            if (label != null) ...[
+              const SizedBox(width: 7),
+
+              Flexible(
+                child: Text(
+                  label,
+
+                  maxLines: 1,
+
+                  overflow:
+                  TextOverflow.ellipsis,
+
+                  style:
+                  GoogleFonts.poppins(
+                    color:
+                    const Color(
+                        0xffA87CFF),
+
+                    fontSize: 11,
+
+                    fontWeight:
+                    FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
-
-      Icon(
-        Icons.favorite_border_rounded,
-        color: Colors.white54,
-        size: 28,
-      ),
-
-      Icon(
-        Icons.repeat_rounded,
-        color: Colors.white54,
-        size: 28,
-      ),
-    ],
-  ),
-
-  const SizedBox(height: 30),
-],
-),
-),
-),
-),
-);
-}
+    );
+  }
 }
