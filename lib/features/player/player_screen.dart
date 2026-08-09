@@ -1,16 +1,18 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:music_app/services/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:music_app/models/song.dart';
+import 'package:music_app/services/audio_service.dart';
+import 'package:music_app/services/library_service.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String title;
   final String artist;
   final String image;
   final String songId;
-
   final List<Song> playlist;
   final int currentIndex;
 
@@ -32,25 +34,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final AudioService audioService = AudioService();
 
   late int currentIndex;
+  late Song activeSong;
 
   bool isPlaying = false;
   bool isLoadingSong = false;
-
   bool isShuffle = false;
   bool isFavorite = false;
 
-  // 0 = OFF
-  // 1 = REPEAT ALL
-  // 2 = REPEAT ONE
   int repeatMode = 0;
 
   Duration currentPosition = Duration.zero;
   Duration totalDuration = Duration.zero;
 
-  DateTime lastPlaybackTap =
-  DateTime.fromMillisecondsSinceEpoch(0);
+  StreamSubscription<PlayerState>? _stateSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration?>? _durationSub;
+  StreamSubscription<Song?>? _songSub;
 
-  bool completionHandled = false;
+  bool _completionHandled = false;
 
   @override
   void initState() {
@@ -58,80 +59,182 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     currentIndex = widget.currentIndex;
 
-    startSong();
+    activeSong = widget.playlist.isNotEmpty
+        ? widget.playlist[currentIndex]
+        : Song(
+      id: widget.songId,
+      title: widget.title,
+      artist: widget.artist,
+      thumbnail: widget.image,
+    );
 
-    // ==========================================
-    // PLAYER STATE
-    // ==========================================
+    _initialize();
+  }
 
-    audioService.audioPlayer.playerStateStream.listen((state) {
+  Future<void> _initialize() async {
+    await LibraryService.instance.init();
+
+    if (!mounted || widget.playlist.isEmpty) return;
+
+    setState(() {
+      isFavorite =
+          LibraryService.instance.isLiked(activeSong.id);
+    });
+
+    _listenToPlayer();
+
+    final current = audioService.currentSong.value;
+
+    // Opening Player from Mini Player must not restart the song.
+    if (current?.id == activeSong.id &&
+        audioService.audioPlayer.duration != null) {
+      if (!mounted) return;
+
+      setState(() {
+        activeSong = current!;
+        isPlaying = audioService.audioPlayer.playing;
+        currentPosition = audioService.currentPosition;
+        totalDuration =
+            audioService.totalDuration ?? Duration.zero;
+      });
+
+      return;
+    }
+
+    await startSong();
+  }
+
+  void _listenToPlayer() {
+    _songSub = audioService.currentSong.addListener(_onCurrentSongChanged)
+    as StreamSubscription<Song?>?;
+
+    _stateSub = audioService.playerStateStream.listen((state) {
       if (!mounted) return;
 
       setState(() {
         isPlaying = state.playing;
       });
 
-      if (state.processingState.toString().contains("completed")) {
-        if (!completionHandled) {
-          completionHandled = true;
+      if (state.processingState == ProcessingState.completed) {
+        if (!_completionHandled) {
+          _completionHandled = true;
           handleSongCompleted();
         }
       } else {
-        completionHandled = false;
+        _completionHandled = false;
       }
     });
 
-    // ==========================================
-    // POSITION
-    // ==========================================
+    _positionSub =
+        audioService.positionStream.listen((position) {
+          if (!mounted) return;
 
-    audioService.positionStream.listen((position) {
-      if (!mounted) return;
-
-      setState(() {
-        currentPosition = position;
-      });
-    });
-
-    // ==========================================
-    // DURATION
-    // ==========================================
-
-    audioService.durationStream.listen((duration) {
-      if (!mounted) return;
-
-      if (duration != null && duration > Duration.zero) {
-        setState(() {
-          totalDuration = duration;
-          isLoadingSong = false;
+          setState(() {
+            currentPosition = position;
+          });
         });
+
+    _durationSub =
+        audioService.durationStream.listen((duration) {
+          if (!mounted || duration == null) return;
+
+          setState(() {
+            totalDuration = duration;
+            isLoadingSong = false;
+          });
+        });
+  }
+
+  void _onCurrentSongChanged() {
+    final song = audioService.currentSong.value;
+
+    if (!mounted || song == null) return;
+
+    final playlistIndex = widget.playlist.indexWhere(
+          (item) => item.id == song.id,
+    );
+
+    setState(() {
+      activeSong = song;
+
+      if (playlistIndex >= 0) {
+        currentIndex = playlistIndex;
       }
+
+      isFavorite =
+          LibraryService.instance.isLiked(song.id);
+
+      isLoadingSong = false;
     });
   }
 
-  // ==========================================
-  // START SONG
-  // ==========================================
-
   Future<void> startSong() async {
+    if (widget.playlist.isEmpty) return;
+
+    final song = activeSong;
+
+    final current = audioService.currentSong.value;
+
+    if (current?.id == song.id &&
+        audioService.audioPlayer.duration != null) {
+      if (mounted) {
+        setState(() {
+          isPlaying = audioService.audioPlayer.playing;
+          isLoadingSong = false;
+        });
+      }
+
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        isLoadingSong = true;
+        currentPosition = Duration.zero;
+        totalDuration = Duration.zero;
+        _completionHandled = false;
+      });
+    }
+
     try {
       await audioService.playSong(
-        widget.playlist[currentIndex].id,
+        song.id,
+        title: decodeHtml(song.title),
+        artist: decodeHtml(song.artist),
+        image: song.thumbnail,
+        clearQueue: false,
       );
+
+      if (!mounted) return;
+
+      setState(() {
+        isFavorite =
+            LibraryService.instance.isLiked(song.id);
+      });
     } catch (e) {
-      debugPrint("Start Song Error: $e");
+      debugPrint('Start Song Error: $e');
+
+      if (mounted) {
+        setState(() {
+          isLoadingSong = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
-    audioService.dispose();
+    _stateSub?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
+
+    // ValueNotifier listener is removed separately.
+    audioService.currentSong.removeListener(
+      _onCurrentSongChanged,
+    );
+
     super.dispose();
   }
-
-  // ==========================================
-  // DECODE HTML
-  // ==========================================
 
   String decodeHtml(String text) {
     return text
@@ -143,34 +246,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
         .replaceAll('&apos;', "'")
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
-        .replaceAll('&#x27;', "'")
-        .replaceAll('&#x2F;', '/');
+        .replaceAll('&#x27;', "'");
   }
-
-  // ==========================================
-  // FORMAT TIME
-  // ==========================================
 
   String formatDuration(Duration duration) {
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds % 60;
 
-    return "$minutes:${seconds.toString().padLeft(2, '0')}";
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
-  // ==========================================
-  // PLAY / PAUSE
-  // ==========================================
-
   Future<void> togglePlayPause() async {
-    final now = DateTime.now();
-
-    if (now.difference(lastPlaybackTap).inMilliseconds < 300) {
-      return;
-    }
-
-    lastPlaybackTap = now;
-
     try {
       if (audioService.audioPlayer.playing) {
         await audioService.pause();
@@ -178,36 +264,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
         await audioService.resume();
       }
     } catch (e) {
-      debugPrint("Play Pause Error: $e");
+      debugPrint('Play/Pause Error: $e');
     }
   }
 
-  // ==========================================
-  // NEXT SONG
-  // ==========================================
+  // ============================================================
+  // NEXT
+  // ============================================================
 
   Future<void> playNext() async {
-    if (widget.playlist.isEmpty || isLoadingSong) {
+    if (isLoadingSong) return;
+
+    // Queue has priority.
+    if (audioService.queue.value.isNotEmpty) {
+      await audioService.skipToNext();
       return;
     }
+
+    if (widget.playlist.isEmpty) return;
 
     int nextIndex;
 
     if (isShuffle) {
-      if (widget.playlist.length <= 1) {
-        return;
-      }
+      if (widget.playlist.length <= 1) return;
 
       final random = Random();
 
       do {
-        nextIndex = random.nextInt(
-          widget.playlist.length,
-        );
+        nextIndex =
+            random.nextInt(widget.playlist.length);
       } while (nextIndex == currentIndex);
     } else {
-      if (currentIndex >=
-          widget.playlist.length - 1) {
+      if (currentIndex >= widget.playlist.length - 1) {
         if (repeatMode == 1) {
           nextIndex = 0;
         } else {
@@ -219,13 +307,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     currentIndex = nextIndex;
+    activeSong = widget.playlist[currentIndex];
 
     await playCurrentSong();
   }
 
-  // ==========================================
-  // PREVIOUS SONG
-  // ==========================================
+  // ============================================================
+  // PREVIOUS
+  // ============================================================
 
   Future<void> playPrevious() async {
     if (widget.playlist.isEmpty || isLoadingSong) {
@@ -239,8 +328,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     if (currentIndex <= 0) {
       if (repeatMode == 1) {
-        currentIndex =
-            widget.playlist.length - 1;
+        currentIndex = widget.playlist.length - 1;
+        activeSong = widget.playlist[currentIndex];
 
         await playCurrentSong();
       } else {
@@ -251,97 +340,372 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
 
     currentIndex--;
+    activeSong = widget.playlist[currentIndex];
 
     await playCurrentSong();
   }
 
-  // ==========================================
-  // PLAY CURRENT SONG
-  // ==========================================
+  // ============================================================
+  // PLAY CURRENT
+  // ============================================================
 
   Future<void> playCurrentSong() async {
-    final song = widget.playlist[currentIndex];
+    if (widget.playlist.isEmpty) return;
 
-    setState(() {
-      isLoadingSong = true;
-      currentPosition = Duration.zero;
-      totalDuration = Duration.zero;
-      isPlaying = false;
-      completionHandled = false;
-    });
+    final song = activeSong;
+
+    if (mounted) {
+      setState(() {
+        isLoadingSong = true;
+        currentPosition = Duration.zero;
+        totalDuration = Duration.zero;
+        isPlaying = false;
+        _completionHandled = false;
+        isFavorite =
+            LibraryService.instance.isLiked(song.id);
+      });
+    }
 
     try {
-      await audioService.playSong(song.id);
+      await audioService.playSong(
+        song.id,
+        title: decodeHtml(song.title),
+        artist: decodeHtml(song.artist),
+        image: song.thumbnail,
+
+        // Important:
+        // Manual next/previous must NOT destroy
+        // an existing queue.
+        clearQueue: false,
+      );
     } catch (e) {
-      debugPrint("Song Change Error: $e");
+      debugPrint('Song Change Error: $e');
 
-      if (!mounted) return;
-
-      setState(() {
-        isLoadingSong = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoadingSong = false;
+        });
+      }
     }
   }
 
-  // ==========================================
-  // SONG COMPLETED
-  // ==========================================
+  // ============================================================
+  // COMPLETION
+  // ============================================================
 
   Future<void> handleSongCompleted() async {
-    if (!mounted || widget.playlist.isEmpty) {
+    if (!mounted) return;
+
+    // Queue gets priority.
+    if (audioService.queue.value.isNotEmpty) {
+      await audioService.skipToNext();
       return;
     }
 
-    // REPEAT ONE
     if (repeatMode == 2) {
       await playCurrentSong();
       return;
     }
 
-    // SHUFFLE
     if (isShuffle) {
       await playNext();
       return;
     }
 
-    // NORMAL NEXT
-    if (currentIndex <
-        widget.playlist.length - 1) {
+    if (currentIndex < widget.playlist.length - 1) {
       currentIndex++;
+      activeSong = widget.playlist[currentIndex];
+
       await playCurrentSong();
       return;
     }
 
-    // REPEAT ALL
     if (repeatMode == 1) {
       currentIndex = 0;
+      activeSong = widget.playlist[currentIndex];
+
       await playCurrentSong();
     }
   }
 
-  // ==========================================
-  // SHUFFLE
-  // ==========================================
+  // ============================================================
+  // FAVORITE
+  // ============================================================
+
+  Future<void> toggleFavorite() async {
+    final liked =
+    await LibraryService.instance.toggleLike(activeSong);
+
+    if (!mounted) return;
+
+    setState(() {
+      isFavorite = liked;
+    });
+  }
+
+  // ============================================================
+  // QUEUE
+  // ============================================================
+
+  void addCurrentToQueue() {
+    audioService.addToQueue(activeSong);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${decodeHtml(activeSong.title)} added to queue',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void addCurrentToQueueNext() {
+    audioService.addToQueueNext(activeSong);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${decodeHtml(activeSong.title)} will play next',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void showQueue() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xff111111),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(26),
+        ),
+      ),
+      builder: (context) {
+        return ValueListenableBuilder<List<Song>>(
+          valueListenable: audioService.queue,
+          builder: (context, queue, _) {
+            return SafeArea(
+              child: SizedBox(
+                height:
+                MediaQuery.of(context).size.height * .65,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius:
+                        BorderRadius.circular(10),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Up Next',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+
+                          const SizedBox(width: 8),
+
+                          Text(
+                            '(${queue.length})',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white54,
+                              fontSize: 14,
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          if (queue.isNotEmpty)
+                            TextButton(
+                              onPressed: () {
+                                audioService
+                                    .clearQueueItems();
+                              },
+                              child: const Text(
+                                'Clear',
+                                style: TextStyle(
+                                  color: Color(0xffA78BFA),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(
+                      color: Colors.white10,
+                    ),
+
+                    if (queue.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.queue_music_rounded,
+                                color: Colors.white30,
+                                size: 55,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Queue is empty',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView.builder(
+                          padding:
+                          const EdgeInsets.only(bottom: 20),
+                          itemCount: queue.length,
+                          itemBuilder: (context, index) {
+                            final queuedSong =
+                            queue[index];
+
+                            return ListTile(
+                              contentPadding:
+                              const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 4,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius:
+                                BorderRadius.circular(10),
+                                child: SizedBox(
+                                  width: 52,
+                                  height: 52,
+                                  child:
+                                  queuedSong.thumbnail
+                                      .trim()
+                                      .isEmpty
+                                      ? Container(
+                                    color:
+                                    const Color(
+                                      0xff252525,
+                                    ),
+                                    child:
+                                    const Icon(
+                                      Icons
+                                          .music_note_rounded,
+                                      color: Colors
+                                          .white54,
+                                    ),
+                                  )
+                                      : Image.network(
+                                    queuedSong
+                                        .thumbnail,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 104,
+                                    cacheHeight: 104,
+                                    errorBuilder:
+                                        (
+                                        _,
+                                        __,
+                                        ___,
+                                        ) =>
+                                        Container(
+                                          color:
+                                          const Color(
+                                            0xff252525,
+                                          ),
+                                          child:
+                                          const Icon(
+                                            Icons
+                                                .music_note_rounded,
+                                            color: Colors
+                                                .white54,
+                                          ),
+                                        ),
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                decodeHtml(
+                                  queuedSong.title,
+                                ),
+                                maxLines: 1,
+                                overflow:
+                                TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight:
+                                  FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                decodeHtml(
+                                  queuedSong.artist,
+                                ),
+                                maxLines: 1,
+                                overflow:
+                                TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                onPressed: () {
+                                  audioService
+                                      .removeFromQueue(
+                                    queuedSong,
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white54,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // SHUFFLE / REPEAT
+  // ============================================================
 
   void toggleShuffle() {
     setState(() {
       isShuffle = !isShuffle;
     });
   }
-
-  // ==========================================
-  // FAVORITE
-  // ==========================================
-
-  void toggleFavorite() {
-    setState(() {
-      isFavorite = !isFavorite;
-    });
-  }
-
-  // ==========================================
-  // REPEAT
-  // ==========================================
 
   void toggleRepeat() {
     setState(() {
@@ -353,166 +717,180 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
-  // ==========================================
-  // REPEAT ICON
-  // ==========================================
-
-  IconData get repeatIcon {
-    if (repeatMode == 2) {
-      return Icons.repeat_one_rounded;
-    }
-
-    return Icons.repeat_rounded;
-  }
-
-  // ==========================================
+  // ============================================================
   // BUILD
-  // ==========================================
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    final song = widget.playlist[currentIndex];
+    if (widget.playlist.isEmpty) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text(
+            'No song available',
+            style: TextStyle(
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
 
-    final screenHeight =
+    final song = activeSong;
+
+    final height =
         MediaQuery.of(context).size.height;
 
-    double albumSize;
+    final albumSize = height < 700
+        ? height * .39
+        : height < 800
+        ? height * .42
+        : height * .46;
 
-    if (screenHeight < 700) {
-      albumSize = screenHeight * 0.39;
-    } else if (screenHeight < 800) {
-      albumSize = screenHeight * 0.42;
-    } else {
-      albumSize = screenHeight * 0.46;
-    }
+    final maxValue = totalDuration.inSeconds <= 0
+        ? 1.0
+        : totalDuration.inSeconds.toDouble();
+
+    final sliderValue = currentPosition.inSeconds
+        .toDouble()
+        .clamp(0.0, maxValue);
 
     return Scaffold(
       backgroundColor: Colors.black,
-
-      // ========================================
-      // APP BAR
-      // ========================================
-
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
-
         leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Colors.white,
-            size: 22,
           ),
         ),
-
         title: Text(
-          "Now Playing",
+          'Now Playing',
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.w600,
             fontSize: 20,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Queue',
+            onPressed: showQueue,
+            icon: ValueListenableBuilder<List<Song>>(
+              valueListenable: audioService.queue,
+              builder: (context, queue, _) {
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(
+                      Icons.queue_music_rounded,
+                      color: Colors.white,
+                      size: 25,
+                    ),
+                    if (queue.isNotEmpty)
+                      Positioned(
+                        right: -6,
+                        top: -6,
+                        child: Container(
+                          constraints:
+                          const BoxConstraints(
+                            minWidth: 17,
+                            minHeight: 17,
+                          ),
+                          padding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: Color(0xff8B5CF6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${queue.length}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
-
-      // ========================================
-      // BODY
-      // ========================================
-
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            22,
-            8,
-            22,
-            10,
-          ),
-
+          padding:
+          const EdgeInsets.fromLTRB(22, 8, 22, 10),
           child: Column(
             children: [
-              // ==================================
-              // ALBUM ART
-              // ==================================
-
               SizedBox(
                 width: albumSize,
                 height: albumSize,
-
                 child: ClipRRect(
                   borderRadius:
                   BorderRadius.circular(28),
-
-                  child: Image.network(
+                  child: song.thumbnail.trim().isEmpty
+                      ? Container(
+                    color:
+                    const Color(0xff181818),
+                    child: const Icon(
+                      Icons.music_note_rounded,
+                      color: Colors.white54,
+                      size: 70,
+                    ),
+                  )
+                      : Image.network(
                     song.thumbnail,
-
                     fit: BoxFit.cover,
-
-                    errorBuilder: (_, __, ___) {
-                      return Container(
-                        color:
-                        const Color(0xff181818),
-
-                        child: const Icon(
-                          Icons.music_note_rounded,
-                          color: Colors.white54,
-                          size: 70,
+                    cacheWidth: 700,
+                    cacheHeight: 700,
+                    errorBuilder:
+                        (_, __, ___) =>
+                        Container(
+                          color:
+                          const Color(0xff181818),
+                          child: const Icon(
+                            Icons.music_note_rounded,
+                            color: Colors.white54,
+                            size: 70,
+                          ),
                         ),
-                      );
-                    },
                   ),
                 ),
               ),
 
               const SizedBox(height: 18),
 
-              // ==================================
-              // SONG TITLE
-              // ==================================
-
               Text(
                 decodeHtml(song.title),
-
                 textAlign: TextAlign.center,
-
                 maxLines: 2,
-
-                overflow:
-                TextOverflow.ellipsis,
-
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
                   color: Colors.white,
-
                   fontSize:
-                  screenHeight < 700
-                      ? 20
-                      : 22,
-
+                  height < 700 ? 20 : 22,
                   fontWeight: FontWeight.w700,
-
-                  height: 1.2,
                 ),
               ),
 
               const SizedBox(height: 5),
 
-              // ==================================
-              // ARTIST
-              // ==================================
-
               Text(
                 decodeHtml(song.artist),
-
-                textAlign: TextAlign.center,
-
                 maxLines: 1,
-
-                overflow:
-                TextOverflow.ellipsis,
-
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
                   color: Colors.white54,
                   fontSize: 15,
@@ -521,19 +899,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
               const SizedBox(height: 12),
 
-              // ==================================
-              // PROGRESS
-              // ==================================
-
               if (isLoadingSong)
                 const SizedBox(
                   height: 38,
-
                   child: Center(
                     child: SizedBox(
                       width: 17,
                       height: 17,
-
                       child:
                       CircularProgressIndicator(
                         strokeWidth: 2,
@@ -544,110 +916,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 )
               else
-                SliderTheme(
-                  data:
-                  SliderTheme.of(context)
-                      .copyWith(
-                    trackHeight: 4,
-
-                    thumbShape:
-                    const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
-                    ),
-
-                    overlayShape:
-                    const RoundSliderOverlayShape(
-                      overlayRadius: 12,
-                    ),
-                  ),
-
-                  child: Slider(
-                    value: currentPosition
-                        .inSeconds
-                        .toDouble()
-                        .clamp(
-                      0,
-                      totalDuration
-                          .inSeconds ==
-                          0
-                          ? 1
-                          : totalDuration
-                          .inSeconds
-                          .toDouble(),
-                    ),
-
-                    min: 0,
-
-                    max: totalDuration
-                        .inSeconds ==
-                        0
-                        ? 1
-                        : totalDuration
-                        .inSeconds
-                        .toDouble(),
-
-                    activeColor:
-                    const Color(0xff8B5CF6),
-
-                    inactiveColor:
-                    Colors.white24,
-
-                    onChanged:
-                        (value) async {
-                      try {
-                        await audioService.seek(
-                          Duration(
-                            seconds:
-                            value.toInt(),
-                          ),
-                        );
-                      } catch (e) {
-                        debugPrint(
-                          "Seek Error: $e",
-                        );
-                      }
-                    },
-                  ),
+                Slider(
+                  value: sliderValue,
+                  min: 0,
+                  max: maxValue,
+                  activeColor:
+                  const Color(0xff8B5CF6),
+                  inactiveColor:
+                  Colors.white24,
+                  onChanged: (value) {
+                    audioService.seek(
+                      Duration(
+                        seconds: value.toInt(),
+                      ),
+                    );
+                  },
                 ),
-
-              // ==================================
-              // TIME
-              // ==================================
 
               Padding(
                 padding:
                 const EdgeInsets.symmetric(
                   horizontal: 4,
                 ),
-
                 child: Row(
                   mainAxisAlignment:
-                  MainAxisAlignment
-                      .spaceBetween,
-
+                  MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       formatDuration(
                         currentPosition,
                       ),
-
                       style:
                       GoogleFonts.poppins(
-                        color:
-                        Colors.white54,
+                        color: Colors.white54,
                         fontSize: 12,
                       ),
                     ),
-
                     Text(
                       formatDuration(
                         totalDuration,
                       ),
-
                       style:
                       GoogleFonts.poppins(
-                        color:
-                        Colors.white54,
+                        color: Colors.white54,
                         fontSize: 12,
                       ),
                     ),
@@ -657,79 +968,58 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
               const Spacer(),
 
-              // ==================================
-              // MAIN CONTROLS
-              // ==================================
-
               Row(
                 mainAxisAlignment:
-                MainAxisAlignment
-                    .spaceEvenly,
-
+                MainAxisAlignment.spaceEvenly,
                 children: [
-                  // PREVIOUS
                   IconButton(
                     onPressed:
                     isLoadingSong
                         ? null
                         : playPrevious,
-
                     icon: const Icon(
                       Icons
                           .skip_previous_rounded,
-
                       color: Colors.white,
-
                       size: 42,
                     ),
                   ),
 
-                  // PLAY / PAUSE
                   Container(
                     width: 78,
                     height: 78,
-
                     decoration:
                     const BoxDecoration(
                       color:
                       Color(0xff8B5CF6),
-
                       shape: BoxShape.circle,
                     ),
-
                     child: IconButton(
                       onPressed:
                       isLoadingSong
                           ? null
                           : togglePlayPause,
-
                       icon: Icon(
                         isPlaying
                             ? Icons
                             .pause_rounded
                             : Icons
                             .play_arrow_rounded,
-
                         color: Colors.white,
-
                         size: 42,
                       ),
                     ),
                   ),
 
-                  // NEXT
                   IconButton(
                     onPressed:
                     isLoadingSong
                         ? null
                         : playNext,
-
                     icon: const Icon(
                       Icons
                           .skip_next_rounded,
-
                       color: Colors.white,
-
                       size: 42,
                     ),
                   ),
@@ -738,67 +1028,57 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
               const SizedBox(height: 14),
 
-              // ==================================
-              // SECONDARY CONTROLS
-              // ==================================
-
               Row(
                 mainAxisAlignment:
                 MainAxisAlignment.center,
-
                 children: [
-                  // SHUFFLE
-                  _premiumControlButton(
-                    icon:
+                  _control(
                     Icons.shuffle_rounded,
-
-                    label: isShuffle
-                        ? "Shuffle"
-                        : null,
-
-                    active: isShuffle,
-
-                    onTap: toggleShuffle,
+                    isShuffle,
+                    toggleShuffle,
                   ),
 
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
 
-                  // FAVORITE
-                  _premiumControlButton(
-                    icon: isFavorite
+                  _control(
+                    Icons
+                        .playlist_add_rounded,
+                    false,
+                    addCurrentToQueue,
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  _control(
+                    Icons
+                        .playlist_play_rounded,
+                    false,
+                    addCurrentToQueueNext,
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  _control(
+                    isFavorite
                         ? Icons.favorite_rounded
                         : Icons
                         .favorite_border_rounded,
-
-                    label: isFavorite
-                        ? "Liked"
-                        : null,
-
-                    active: isFavorite,
-
-                    onTap: toggleFavorite,
+                    isFavorite,
+                    toggleFavorite,
                   ),
 
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
 
-                  // REPEAT
-                  _premiumControlButton(
-                    icon: repeatIcon,
-
-                    label: repeatMode == 1
-                        ? "Repeat All"
-                        : repeatMode == 2
-                        ? "Repeat One"
-                        : null,
-
-                    active: repeatMode != 0,
-
-                    onTap: toggleRepeat,
+                  _control(
+                    repeatMode == 2
+                        ? Icons
+                        .repeat_one_rounded
+                        : Icons.repeat_rounded,
+                    repeatMode != 0,
+                    toggleRepeat,
                   ),
                 ],
               ),
-
-              const SizedBox(height: 6),
             ],
           ),
         ),
@@ -806,97 +1086,39 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  // ==========================================
-  // PREMIUM SECONDARY BUTTON
-  // ==========================================
-
-  Widget _premiumControlButton({
-    required IconData icon,
-    required String? label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
+  Widget _control(
+      IconData icon,
+      bool active,
+      VoidCallback onTap,
+      ) {
+    return InkWell(
       onTap: onTap,
-
+      borderRadius:
+      BorderRadius.circular(18),
       child: AnimatedContainer(
         duration:
         const Duration(milliseconds: 220),
-
-        curve: Curves.easeOut,
-
-        padding: EdgeInsets.symmetric(
-          horizontal:
-          label != null ? 14 : 0,
-        ),
-
-        width:
-        label != null ? 105 : 52,
-
-        height: 52,
-
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(
           color: active
               ? const Color(0xff8B5CF6)
-              .withOpacity(0.16)
+              .withValues(alpha: .16)
               : const Color(0xff151515),
-
           borderRadius:
           BorderRadius.circular(18),
-
           border: Border.all(
             color: active
                 ? const Color(0xff8B5CF6)
                 : Colors.white12,
-
-            width: 1,
           ),
         ),
-
-        child: Row(
-          mainAxisAlignment:
-          MainAxisAlignment.center,
-
-          mainAxisSize: MainAxisSize.min,
-
-          children: [
-            Icon(
-              icon,
-
-              color: active
-                  ? const Color(0xffA87CFF)
-                  : Colors.white60,
-
-              size: 23,
-            ),
-
-            if (label != null) ...[
-              const SizedBox(width: 7),
-
-              Flexible(
-                child: Text(
-                  label,
-
-                  maxLines: 1,
-
-                  overflow:
-                  TextOverflow.ellipsis,
-
-                  style:
-                  GoogleFonts.poppins(
-                    color:
-                    const Color(
-                        0xffA87CFF),
-
-                    fontSize: 11,
-
-                    fontWeight:
-                    FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ],
+        child: Icon(
+          icon,
+          color: active
+              ? const Color(0xffA87CFF)
+              : Colors.white60,
+          size: 22,
         ),
       ),
     );

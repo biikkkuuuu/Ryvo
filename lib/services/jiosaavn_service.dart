@@ -1,22 +1,32 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 class JioSaavnService {
-  // USB + adb reverse use kar rahe hain
-  static const String baseUrl = "http://10.57.39.212:3000";  Future<List> searchSongs(String query) async {
+  static const String baseUrl = "https://jiosaavn-api-main-taupe.vercel.app";
+
+  Future<List> searchSongs(
+      String query, {
+        int page = 0,
+        int limit = 20,
+      }) async {
     final uri = Uri.parse(
-      "$baseUrl/api/search/songs?query=${Uri.encodeComponent(query)}",
+      "$baseUrl/api/search/songs"
+          "?query=${Uri.encodeComponent(query)}"
+          "&page=$page"
+          "&limit=$limit",
     );
 
     try {
       print("========== SEARCH ==========");
-      print("REQUEST URL : $uri");
+      print("QUERY : $query");
+      print("PAGE  : $page");
+      print("LIMIT : $limit");
+      print("URL   : $uri");
 
       final response = await http.get(uri);
 
       print("STATUS CODE : ${response.statusCode}");
-      print("RESPONSE BODY : ${response.body}");
-      print("============================");
 
       if (response.statusCode != 200) {
         throw Exception(
@@ -24,10 +34,13 @@ class JioSaavnService {
         );
       }
 
-      final Map<String, dynamic> json = jsonDecode(response.body);
+      final Map<String, dynamic> json =
+      jsonDecode(response.body);
 
       if (json["success"] != true) {
-        throw Exception("API returned success=false");
+        throw Exception(
+          "API returned success=false",
+        );
       }
 
       final data = json["data"];
@@ -40,7 +53,8 @@ class JioSaavnService {
         return data;
       }
 
-      if (data is Map && data["results"] is List) {
+      if (data is Map &&
+          data["results"] is List) {
         return data["results"];
       }
 
@@ -50,6 +64,7 @@ class JioSaavnService {
       print(e);
       print(stackTrace);
       print("==================================");
+
       rethrow;
     }
   }
