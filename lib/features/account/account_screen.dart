@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/models/song.dart';
@@ -49,349 +50,508 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xff070B0C),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        title: Text(
-          'Account',
-          style: GoogleFonts.poppins(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xff0A0614),
+
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+
+        // ======================================================
+        // APP BAR
+        // ======================================================
+
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: false,
+
+          title: Text(
+            'Account',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+
+          iconTheme: const IconThemeData(
             color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
+            size: 32,
           ),
         ),
-      ),
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 35),
-        children: [
-          // =====================================================
-          // PROFILE
-          // =====================================================
 
-          _glass(
-            child: Row(
-              children: [
-                Container(
-                  width: 62,
-                  height: 62,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        Color(0xffA78BFA),
-                        Color(0xff5B21B6),
-                      ],
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: Colors.white,
-                    size: 31,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'RYVO User',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Your music space',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white54,
-                          fontSize: 11,
-                        ),
-                      ),
+        // ======================================================
+        // BODY
+        // ======================================================
+
+        body: Stack(
+          children: [
+            // --------------------------------------------------
+            // SAME BACKGROUND AS HOME
+            // --------------------------------------------------
+
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xff2A1152),
+                      Color(0xff3B1670),
+                      Color(0xff1B0E33),
+                      Color(0xff0A0614),
+                    ],
+                    stops: [
+                      0.0,
+                      0.32,
+                      0.68,
+                      1.0,
                     ],
                   ),
                 ),
-                _circleButton(
-                  Icons.edit_rounded,
-                      () {
-                    _showMessage(
-                      'Profile editing coming next',
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 18),
-
-          // =====================================================
-          // YOUR MUSIC
-          // =====================================================
-
-          _sectionTitle('Your Music'),
-
-          _menuTile(
-            Icons.favorite_rounded,
-            'Liked Songs',
-            'Songs you love',
-                () {
-              _openLikedSongs();
-            },
-          ),
-
-          _menuTile(
-            Icons.history_rounded,
-            'Recently Played',
-            'Your latest 20 songs',
-                () {
-              _openRecentlyPlayed();
-            },
-          ),
-
-          _menuTile(
-            Icons.queue_music_rounded,
-            'My Playlists',
-            'Manage your playlists',
-                () {
-              _showMessage(
-                'Playlist manager',
-              );
-            },
-          ),
-
-          _menuTile(
-            Icons.download_rounded,
-            'Downloads',
-            'Your offline music',
-                () {
-              _showMessage(
-                'Downloads section',
-              );
-            },
-          ),
-
-          const SizedBox(height: 18),
-
-          // =====================================================
-          // PREFERENCES
-          // =====================================================
-
-          _sectionTitle('Preferences'),
-
-          _menuTile(
-            Icons.palette_rounded,
-            'Theme',
-            themes[selectedTheme].name,
-            _showThemeSheet,
-          ),
-
-          _switchTile(
-            Icons.notifications_active_rounded,
-            'Notifications',
-            'New music and app updates',
-            notifications,
-                (value) {
-              setState(() {
-                notifications = value;
-              });
-            },
-          ),
-
-          _switchTile(
-            Icons.wifi_rounded,
-            'Wi-Fi Only Downloads',
-            'Avoid mobile data for downloads',
-            wifiOnly,
-                (value) {
-              setState(() {
-                wifiOnly = value;
-              });
-            },
-          ),
-
-          _switchTile(
-            Icons.all_inclusive_rounded,
-            'Gapless Playback',
-            'Smooth transition between songs',
-            gaplessPlayback,
-                (value) {
-              setState(() {
-                gaplessPlayback = value;
-              });
-            },
-          ),
-
-          const SizedBox(height: 18),
-
-          // =====================================================
-          // APP
-          // =====================================================
-
-          _sectionTitle('App'),
-
-          _menuTile(
-            Icons.storage_rounded,
-            'Storage & Cache',
-            'Manage downloaded music and cache',
-            _showStorageSheet,
-          ),
-
-          _menuTile(
-            Icons.info_outline_rounded,
-            'About RYVO',
-            'Version, credits and information',
-            _showAbout,
-          ),
-
-          _menuTile(
-            Icons.privacy_tip_outlined,
-            'Privacy',
-            'Privacy information',
-                () {
-              _showMessage(
-                'Privacy page',
-              );
-            },
-          ),
-
-          _menuTile(
-            Icons.description_outlined,
-            'Terms & Conditions',
-            'App terms and conditions',
-                () {
-              _showMessage(
-                'Terms & Conditions',
-              );
-            },
-          ),
-
-          const SizedBox(height: 14),
-
-          // =====================================================
-          // LOGOUT
-          // =====================================================
-
-          _glass(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: () {
-                _showMessage(
-                  'Logout can be connected when authentication is added',
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                ),
-                child: Row(
-                  mainAxisAlignment:
-                  MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.logout_rounded,
-                      color: Color(0xffff7777),
-                    ),
-                    const SizedBox(width: 9),
-                    Text(
-                      'Log out',
-                      style: GoogleFonts.poppins(
-                        color: const Color(0xffff7777),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 30),
+            // --------------------------------------------------
+            // AMBIENT PURPLE LIGHT
+            // --------------------------------------------------
 
-          // =====================================================
-          // RYVO BRANDING
-          // =====================================================
+            Positioned(
+              top: -120,
+              left: -110,
+              child: _ambientLight(
+                size: 300,
+                color: const Color(0xff7C3AED),
+              ),
+            ),
 
-          Center(
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xffA78BFA),
-                        shape: BoxShape.circle,
+            Positioned(
+              top: 500,
+              right: -130,
+              child: _ambientLight(
+                size: 270,
+                color: const Color(0xff6D28D9),
+              ),
+            ),
+
+            Positioned(
+              bottom: -100,
+              left: -100,
+              child: _ambientLight(
+                size: 250,
+                color: const Color(0xff9333EA),
+              ),
+            ),
+
+            // --------------------------------------------------
+            // ACCOUNT CONTENT
+            // --------------------------------------------------
+
+            SafeArea(
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+
+                padding: const EdgeInsets.fromLTRB(
+                  18,
+                  68,
+                  18,
+                  35,
+                ),
+
+                children: [
+                  // =====================================================
+                  // PROFILE
+                  // =====================================================
+
+                  _glass(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 62,
+                          height: 62,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xffA78BFA),
+                                Color(0xff5B21B6),
+                              ],
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 31,
+                          ),
+                        ),
+
+                        const SizedBox(width: 14),
+
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'RYVO User',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+
+                              const SizedBox(height: 3),
+
+                              Text(
+                                'Your music space',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        _circleButton(
+                          Icons.edit_rounded,
+                              () {
+                            _showMessage(
+                              'Profile editing coming next',
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // =====================================================
+                  // YOUR MUSIC
+                  // =====================================================
+
+                  _sectionTitle('Your Music'),
+
+                  _menuTile(
+                    Icons.favorite_rounded,
+                    'Liked Songs',
+                    'Songs you love',
+                        () {
+                      _openLikedSongs();
+                    },
+                  ),
+
+                  _menuTile(
+                    Icons.history_rounded,
+                    'Recently Played',
+                    'Your latest 20 songs',
+                        () {
+                      _openRecentlyPlayed();
+                    },
+                  ),
+
+                  _menuTile(
+                    Icons.queue_music_rounded,
+                    'My Playlists',
+                    'Manage your playlists',
+                        () {
+                      _showMessage(
+                        'Playlist manager',
+                      );
+                    },
+                  ),
+
+                  _menuTile(
+                    Icons.download_rounded,
+                    'Downloads',
+                    'Your offline music',
+                        () {
+                      _showMessage(
+                        'Downloads section',
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // =====================================================
+                  // PREFERENCES
+                  // =====================================================
+
+                  _sectionTitle('Preferences'),
+
+                  _menuTile(
+                    Icons.palette_rounded,
+                    'Theme',
+                    themes[selectedTheme].name,
+                    _showThemeSheet,
+                  ),
+
+                  _switchTile(
+                    Icons.notifications_active_rounded,
+                    'Notifications',
+                    'New music and app updates',
+                    notifications,
+                        (value) {
+                      setState(() {
+                        notifications = value;
+                      });
+                    },
+                  ),
+
+                  _switchTile(
+                    Icons.wifi_rounded,
+                    'Wi-Fi Only Downloads',
+                    'Avoid mobile data for downloads',
+                    wifiOnly,
+                        (value) {
+                      setState(() {
+                        wifiOnly = value;
+                      });
+                    },
+                  ),
+
+                  _switchTile(
+                    Icons.all_inclusive_rounded,
+                    'Gapless Playback',
+                    'Smooth transition between songs',
+                    gaplessPlayback,
+                        (value) {
+                      setState(() {
+                        gaplessPlayback = value;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // =====================================================
+                  // APP
+                  // =====================================================
+
+                  _sectionTitle('App'),
+
+                  _menuTile(
+                    Icons.storage_rounded,
+                    'Storage & Cache',
+                    'Manage downloaded music and cache',
+                    _showStorageSheet,
+                  ),
+
+                  _menuTile(
+                    Icons.info_outline_rounded,
+                    'About RYVO',
+                    'Version, credits and information',
+                    _showAbout,
+                  ),
+
+                  _menuTile(
+                    Icons.privacy_tip_outlined,
+                    'Privacy',
+                    'Privacy information',
+                        () {
+                      _showMessage(
+                        'Privacy page',
+                      );
+                    },
+                  ),
+
+                  _menuTile(
+                    Icons.description_outlined,
+                    'Terms & Conditions',
+                    'App terms and conditions',
+                        () {
+                      _showMessage(
+                        'Terms & Conditions',
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // =====================================================
+                  // LOGOUT
+                  // =====================================================
+
+                  _glass(
+                    child: InkWell(
+                      borderRadius:
+                      BorderRadius.circular(22),
+                      onTap: () {
+                        _showMessage(
+                          'Logout can be connected when authentication is added',
+                        );
+                      },
+                      child: Padding(
+                        padding:
+                        const EdgeInsets.symmetric(
+                          vertical: 16,
+                        ),
+                        child: Row(
+                          mainAxisAlignment:
+                          MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.logout_rounded,
+                              color: Color(0xffff7777),
+                            ),
+
+                            const SizedBox(width: 9),
+
+                            Text(
+                              'Log out',
+                              style: GoogleFonts.poppins(
+                                color:
+                                const Color(0xffff7777),
+                                fontWeight:
+                                FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'RYVO',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 3,
-                      ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // =====================================================
+                  // RYVO BRANDING
+                  // =====================================================
+
+                  Center(
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment:
+                          MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration:
+                              const BoxDecoration(
+                                color: Color(0xffA78BFA),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            Text(
+                              'RYVO',
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight:
+                                FontWeight.w800,
+                                letterSpacing: 3,
+                              ),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration:
+                              const BoxDecoration(
+                                color: Color(0xffA78BFA),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 7),
+
+                        Text(
+                          'CRAFTED BY RANA',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white54,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 2.2,
+                          ),
+                        ),
+
+                        const SizedBox(height: 5),
+
+                        Text(
+                          'Made with music & code',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white24,
+                            fontSize: 9,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+
+                        const SizedBox(height: 3),
+
+                        Text(
+                          'Version 1.0.0',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white12,
+                            fontSize: 8,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xffA78BFA),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 7),
-
-                Text(
-                  'CRAFTED BY RANA',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white54,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2.2,
                   ),
-                ),
 
-                const SizedBox(height: 5),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                Text(
-                  'Made with music & code',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white24,
-                    fontSize: 9,
-                    letterSpacing: 0.8,
-                  ),
-                ),
+  // ============================================================
+  // AMBIENT LIGHT
+  // ============================================================
 
-                const SizedBox(height: 3),
-
-                Text(
-                  'Version 1.0.0',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white12,
-                    fontSize: 8,
-                  ),
-                ),
+  Widget _ambientLight({
+    required double size,
+    required Color color,
+  }) {
+    return IgnorePointer(
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(
+          sigmaX: 55,
+          sigmaY: 55,
+        ),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                color.withValues(alpha: 0.15),
+                color.withValues(alpha: 0.045),
+                color.withValues(alpha: 0.0),
+              ],
+              stops: const [
+                0.0,
+                0.52,
+                1.0,
               ],
             ),
           ),
-
-          const SizedBox(height: 20),
-        ],
+        ),
       ),
     );
   }
@@ -433,7 +593,8 @@ class _AccountScreenState extends State<AccountScreen> {
       emptyText: 'No recently played songs',
       canClear: true,
       clearAction: () async {
-        await LibraryService.instance.clearRecentlyPlayed();
+        await LibraryService.instance
+            .clearRecentlyPlayed();
       },
     );
   }
@@ -484,6 +645,7 @@ class _AccountScreenState extends State<AccountScreen> {
                           ),
                         ),
                       ),
+
                       if (canClear)
                         IconButton(
                           tooltip: 'Clear',
@@ -536,6 +698,7 @@ class _AccountScreenState extends State<AccountScreen> {
                           horizontal: 18,
                           vertical: 4,
                         ),
+
                         leading: ClipRRect(
                           borderRadius:
                           BorderRadius.circular(
@@ -557,8 +720,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                 height: 54,
                                 color:
                                 Colors.white10,
-                                child:
-                                const Icon(
+                                child: const Icon(
                                   Icons
                                       .music_note_rounded,
                                   color:
@@ -568,6 +730,7 @@ class _AccountScreenState extends State<AccountScreen> {
                             },
                           ),
                         ),
+
                         title: Text(
                           _decodeSongText(
                             song.title,
@@ -577,13 +740,13 @@ class _AccountScreenState extends State<AccountScreen> {
                           TextOverflow.ellipsis,
                           style:
                           GoogleFonts.poppins(
-                            color:
-                            Colors.white,
+                            color: Colors.white,
                             fontSize: 13,
                             fontWeight:
                             FontWeight.w600,
                           ),
                         ),
+
                         subtitle: Text(
                           _decodeSongText(
                             song.artist,
@@ -593,19 +756,19 @@ class _AccountScreenState extends State<AccountScreen> {
                           TextOverflow.ellipsis,
                           style:
                           GoogleFonts.poppins(
-                            color:
-                            Colors.white54,
+                            color: Colors.white54,
                             fontSize: 10,
                           ),
                         ),
-                        trailing:
-                        const Icon(
+
+                        trailing: const Icon(
                           Icons
                               .play_circle_fill_rounded,
                           color:
                           Color(0xffA78BFA),
                           size: 29,
                         ),
+
                         onTap: () {
                           Navigator.pop(
                             sheetContext,
@@ -624,8 +787,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                     song.thumbnail,
                                     songId:
                                     song.id,
-                                    playlist:
-                                    songs,
+                                    playlist: songs,
                                     currentIndex:
                                     index,
                                   ),
@@ -666,7 +828,9 @@ class _AccountScreenState extends State<AccountScreen> {
             color: Colors.white24,
             size: 52,
           ),
+
           const SizedBox(height: 12),
+
           Text(
             emptyText,
             textAlign: TextAlign.center,
@@ -737,15 +901,13 @@ class _AccountScreenState extends State<AccountScreen> {
         child: Container(
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color:
-            Colors.white.withValues(
+            color: Colors.white.withValues(
               alpha: 0.055,
             ),
             borderRadius:
             BorderRadius.circular(22),
             border: Border.all(
-              color:
-              Colors.white.withValues(
+              color: Colors.white.withValues(
                 alpha: 0.10,
               ),
             ),
@@ -778,7 +940,9 @@ class _AccountScreenState extends State<AccountScreen> {
           child: Row(
             children: [
               _iconBox(icon),
+
               const SizedBox(width: 13),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment:
@@ -794,7 +958,9 @@ class _AccountScreenState extends State<AccountScreen> {
                         FontWeight.w600,
                       ),
                     ),
+
                     const SizedBox(height: 2),
+
                     Text(
                       subtitle,
                       maxLines: 1,
@@ -812,6 +978,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   ],
                 ),
               ),
+
               const Icon(
                 Icons.chevron_right_rounded,
                 color: Colors.white38,
@@ -842,7 +1009,9 @@ class _AccountScreenState extends State<AccountScreen> {
         child: Row(
           children: [
             _iconBox(icon),
+
             const SizedBox(width: 13),
+
             Expanded(
               child: Column(
                 crossAxisAlignment:
@@ -857,7 +1026,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       FontWeight.w600,
                     ),
                   ),
+
                   const SizedBox(height: 2),
+
                   Text(
                     subtitle,
                     style: GoogleFonts.poppins(
@@ -871,6 +1042,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 ],
               ),
             ),
+
             Switch.adaptive(
               value: value,
               onChanged: onChanged,
@@ -980,7 +1152,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       FontWeight.w700,
                     ),
                   ),
+
                   const SizedBox(height: 5),
+
                   Text(
                     'Pick a built-in RYVO look',
                     style:
@@ -992,7 +1166,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       fontSize: 11,
                     ),
                   ),
+
                   const SizedBox(height: 16),
+
                   ...List.generate(
                     themes.length,
                         (index) {
@@ -1012,9 +1188,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         child: InkWell(
                           borderRadius:
                           BorderRadius
-                              .circular(
-                            18,
-                          ),
+                              .circular(18),
                           onTap: () {
                             setState(() {
                               selectedTheme =
@@ -1028,23 +1202,19 @@ class _AccountScreenState extends State<AccountScreen> {
                           child: Container(
                             padding:
                             const EdgeInsets
-                                .all(
-                              12,
-                            ),
+                                .all(12),
                             decoration:
                             BoxDecoration(
                               color: selected
                                   ? Colors
                                   .white
                                   .withValues(
-                                alpha:
-                                0.08,
+                                alpha: 0.08,
                               )
                                   : Colors
                                   .white
                                   .withValues(
-                                alpha:
-                                0.035,
+                                alpha: 0.035,
                               ),
                               borderRadius:
                               BorderRadius
@@ -1081,9 +1251,11 @@ class _AccountScreenState extends State<AccountScreen> {
                                     ),
                                   ),
                                 ),
+
                                 const SizedBox(
                                   width: 12,
                                 ),
+
                                 Expanded(
                                   child:
                                   Column(
@@ -1105,6 +1277,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                               .w600,
                                         ),
                                       ),
+
                                       Text(
                                         theme
                                             .subtitle,
@@ -1124,6 +1297,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                     ],
                                   ),
                                 ),
+
                                 if (selected)
                                   const Icon(
                                     Icons
@@ -1179,7 +1353,9 @@ class _AccountScreenState extends State<AccountScreen> {
                 Color(0xffA78BFA),
                 size: 38,
               ),
+
               const SizedBox(height: 10),
+
               Text(
                 'Storage & Cache',
                 style:
@@ -1190,7 +1366,9 @@ class _AccountScreenState extends State<AccountScreen> {
                   FontWeight.w700,
                 ),
               ),
+
               const SizedBox(height: 5),
+
               Text(
                 'Cache management can be connected to local storage next.',
                 textAlign:
@@ -1204,7 +1382,9 @@ class _AccountScreenState extends State<AccountScreen> {
                   fontSize: 11,
                 ),
               ),
+
               const SizedBox(height: 18),
+
               SizedBox(
                 width: double.infinity,
                 child:

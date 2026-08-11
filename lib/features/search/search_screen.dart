@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/models/song.dart';
@@ -54,148 +57,382 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
 
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          "Search",
-          style: GoogleFonts.poppins(
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xff0A0614),
+
+        // Same fullscreen behavior as Home
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+
+        // ======================================================
+        // APP BAR
+        // ======================================================
+
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+
+          title: Text(
+            "Search",
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+
+          iconTheme: const IconThemeData(
             color: Colors.white,
-            fontWeight: FontWeight.w600,
+            size: 34,
           ),
         ),
-      ),
 
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+        // ======================================================
+        // BODY
+        // ======================================================
+
+        body: Stack(
           children: [
-            TextField(
-              controller: _controller,
-              onSubmitted: (_) => search(),
-              style: const TextStyle(
-                color: Colors.white,
-              ),
-              decoration: InputDecoration(
-                hintText: "Search songs...",
-                hintStyle: const TextStyle(
-                  color: Colors.white54,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: Colors.white54,
-                ),
-                suffixIcon: IconButton(
-                  onPressed: search,
-                  icon: const Icon(
-                    Icons.send,
-                    color: Colors.white,
+            // --------------------------------------------------
+            // SAME HOME BACKGROUND
+            // --------------------------------------------------
+
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xff2A1152),
+                      Color(0xff3B1670),
+                      Color(0xff1B0E33),
+                      Color(0xff0A0614),
+                    ],
+                    stops: [
+                      0.0,
+                      0.32,
+                      0.68,
+                      1.0,
+                    ],
                   ),
-                ),
-                filled: true,
-                fillColor: const Color(0xff181818),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
                 ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            // --------------------------------------------------
+            // AMBIENT PURPLE LIGHT
+            // --------------------------------------------------
 
-            if (loading)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xff8B5CF6),
-                  ),
-                ),
+            Positioned(
+              top: -120,
+              left: -110,
+              child: _ambientLight(
+                size: 300,
+                color: const Color(0xff7C3AED),
               ),
+            ),
 
-            if (!loading)
-              Expanded(
-                child: ListView.builder(
-                  itemCount: results.length,
-                  itemBuilder: (context, index) {
-                    final song = results[index];
+            Positioned(
+              top: 520,
+              right: -130,
+              child: _ambientLight(
+                size: 270,
+                color: const Color(0xff6D28D9),
+              ),
+            ),
 
-                    return Card(
-                      color: const Color(0xff181818),
-                      margin: const EdgeInsets.only(
-                        bottom: 12,
+            Positioned(
+              bottom: -100,
+              left: -100,
+              child: _ambientLight(
+                size: 250,
+                color: const Color(0xff9333EA),
+              ),
+            ),
+
+            // --------------------------------------------------
+            // CONTENT
+            // --------------------------------------------------
+
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  62,
+                  20,
+                  20,
+                ),
+                child: Column(
+                  children: [
+                    // ==================================================
+                    // SEARCH FIELD
+                    // ==================================================
+
+                    TextField(
+                      controller: _controller,
+                      onSubmitted: (_) => search(),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 15,
                       ),
-                      child: ListTile(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PlayerScreen(
-                                title: song.title,
-                                artist: song.artist,
-                                image: song.thumbnail,
-                                songId: song.id,
+                      cursorColor: const Color(0xffA78BFA),
 
-                                // Complete search list
-                                playlist: results,
-
-                                // Current song index
-                                currentIndex: index,
-                              ),
-                            ),
-                          );
-                        },
-
-                        leading: ClipRRect(
-                          borderRadius:
-                          BorderRadius.circular(8),
-                          child: Image.network(
-                            song.thumbnail,
-                            width: 55,
-                            height: 55,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
-                              return const Icon(
-                                Icons.music_note,
-                                color: Colors.white54,
-                              );
-                            },
+                      decoration: InputDecoration(
+                        hintText: "Search songs...",
+                        hintStyle: GoogleFonts.poppins(
+                          color: Colors.white.withValues(
+                            alpha: 0.42,
                           ),
+                          fontSize: 16,
                         ),
 
-                        title: Text(
-                          song.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
+                        prefixIcon: const Icon(
+                          Icons.search_rounded,
+                          color: Colors.white54,
+                          size: 31,
+                        ),
+
+                        suffixIcon: IconButton(
+                          onPressed: search,
+                          icon: const Icon(
+                            Icons.send_rounded,
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
+                            size: 30,
                           ),
                         ),
 
-                        subtitle: Text(
-                          song.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
-                            color: Colors.white54,
+                        filled: true,
+                        fillColor: Colors.white.withValues(
+                          alpha: 0.055,
+                        ),
+
+                        contentPadding:
+                        const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 18,
+                        ),
+
+                        border: OutlineInputBorder(
+                          borderRadius:
+                          BorderRadius.circular(22),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(
+                              alpha: 0.12,
+                            ),
                           ),
                         ),
 
-                        trailing: const Icon(
-                          Icons.play_circle_fill,
-                          color: Color(0xff8B5CF6),
-                          size: 34,
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius:
+                          BorderRadius.circular(22),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(
+                              alpha: 0.12,
+                            ),
+                          ),
+                        ),
+
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius:
+                          BorderRadius.circular(22),
+                          borderSide: BorderSide(
+                            color: const Color(0xffA78BFA)
+                                .withValues(alpha: 0.35),
+                          ),
                         ),
                       ),
-                    );
-                  },
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ==================================================
+                    // RESULTS / LOADING
+                    // ==================================================
+
+                    if (loading)
+                      const Expanded(
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xffA78BFA),
+                          ),
+                        ),
+                      ),
+
+                    if (!loading)
+                      Expanded(
+                        child: ListView.builder(
+                          physics:
+                          const BouncingScrollPhysics(),
+                          itemCount: results.length,
+                          itemBuilder: (context, index) {
+                            final song = results[index];
+
+                            return Container(
+                              margin: const EdgeInsets.only(
+                                bottom: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(
+                                  alpha: 0.045,
+                                ),
+                                borderRadius:
+                                BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: Colors.white
+                                      .withValues(alpha: 0.10),
+                                ),
+                              ),
+                              child: ListTile(
+                                contentPadding:
+                                const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 5,
+                                ),
+
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          PlayerScreen(
+                                            title: song.title,
+                                            artist: song.artist,
+                                            image: song.thumbnail,
+                                            songId: song.id,
+
+                                            // Complete search list
+                                            playlist: results,
+
+                                            // Current song index
+                                            currentIndex: index,
+                                          ),
+                                    ),
+                                  );
+                                },
+
+                                leading: ClipRRect(
+                                  borderRadius:
+                                  BorderRadius.circular(10),
+                                  child: Image.network(
+                                    song.thumbnail,
+                                    width: 55,
+                                    height: 55,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (_, __, ___) {
+                                      return Container(
+                                        width: 55,
+                                        height: 55,
+                                        decoration:
+                                        BoxDecoration(
+                                          color: const Color(
+                                            0xff312E81,
+                                          ),
+                                          borderRadius:
+                                          BorderRadius
+                                              .circular(10),
+                                        ),
+                                        child: const Icon(
+                                          Icons
+                                              .music_note_rounded,
+                                          color:
+                                          Colors.white54,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+
+                                title: Text(
+                                  song.title,
+                                  maxLines: 1,
+                                  overflow:
+                                  TextOverflow.ellipsis,
+                                  style:
+                                  GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontWeight:
+                                    FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+
+                                subtitle: Text(
+                                  song.artist,
+                                  maxLines: 1,
+                                  overflow:
+                                  TextOverflow.ellipsis,
+                                  style:
+                                  GoogleFonts.poppins(
+                                    color: Colors.white54,
+                                    fontSize: 10,
+                                  ),
+                                ),
+
+                                trailing: const Icon(
+                                  Icons
+                                      .play_circle_fill_rounded,
+                                  color: Color(0xffA78BFA),
+                                  size: 34,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 ),
               ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // AMBIENT LIGHT
+  // ============================================================
+
+  Widget _ambientLight({
+    required double size,
+    required Color color,
+  }) {
+    return IgnorePointer(
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(
+          sigmaX: 55,
+          sigmaY: 55,
+        ),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                color.withValues(alpha: 0.15),
+                color.withValues(alpha: 0.045),
+                color.withValues(alpha: 0.0),
+              ],
+              stops: const [
+                0.0,
+                0.52,
+                1.0,
+              ],
+            ),
+          ),
         ),
       ),
     );
