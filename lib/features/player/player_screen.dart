@@ -62,11 +62,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     activeSong = widget.playlist.isNotEmpty
         ? widget.playlist[currentIndex]
         : Song(
-      id: widget.songId,
-      title: widget.title,
-      artist: widget.artist,
-      thumbnail: widget.image,
-    );
+            id: widget.songId,
+            title: widget.title,
+            artist: widget.artist,
+            thumbnail: widget.image,
+          );
 
     _initialize();
   }
@@ -77,11 +77,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!mounted || widget.playlist.isEmpty) return;
 
     setState(() {
-      isFavorite =
-          LibraryService.instance.isLiked(activeSong.id);
+      isFavorite = LibraryService.instance.isLiked(activeSong.id);
     });
 
     _listenToPlayer();
+
+    // Keep the global playback queue in sync with this PlayerScreen.
+    // Required for notification / mini-player Next.
+    audioService.setPlaybackQueue(widget.playlist, currentIndex: currentIndex);
 
     final current = audioService.currentSong.value;
 
@@ -94,8 +97,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         activeSong = current!;
         isPlaying = audioService.audioPlayer.playing;
         currentPosition = audioService.currentPosition;
-        totalDuration =
-            audioService.totalDuration ?? Duration.zero;
+        totalDuration = audioService.totalDuration ?? Duration.zero;
       });
 
       return;
@@ -105,8 +107,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _listenToPlayer() {
-    _songSub = audioService.currentSong.addListener(_onCurrentSongChanged)
-    as StreamSubscription<Song?>?;
+    _songSub =
+        audioService.currentSong.addListener(_onCurrentSongChanged)
+            as StreamSubscription<Song?>?;
 
     _stateSub = audioService.playerStateStream.listen((state) {
       if (!mounted) return;
@@ -125,24 +128,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
     });
 
-    _positionSub =
-        audioService.positionStream.listen((position) {
-          if (!mounted) return;
+    _positionSub = audioService.positionStream.listen((position) {
+      if (!mounted) return;
 
-          setState(() {
-            currentPosition = position;
-          });
-        });
+      setState(() {
+        currentPosition = position;
+      });
+    });
 
-    _durationSub =
-        audioService.durationStream.listen((duration) {
-          if (!mounted || duration == null) return;
+    _durationSub = audioService.durationStream.listen((duration) {
+      if (!mounted || duration == null) return;
 
-          setState(() {
-            totalDuration = duration;
-            isLoadingSong = false;
-          });
-        });
+      setState(() {
+        totalDuration = duration;
+        isLoadingSong = false;
+      });
+    });
   }
 
   void _onCurrentSongChanged() {
@@ -151,7 +152,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!mounted || song == null) return;
 
     final playlistIndex = widget.playlist.indexWhere(
-          (item) => item.id == song.id,
+      (item) => item.id == song.id,
     );
 
     setState(() {
@@ -161,8 +162,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         currentIndex = playlistIndex;
       }
 
-      isFavorite =
-          LibraryService.instance.isLiked(song.id);
+      isFavorite = LibraryService.instance.isLiked(song.id);
 
       isLoadingSong = false;
     });
@@ -175,8 +175,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final current = audioService.currentSong.value;
 
-    if (current?.id == song.id &&
-        audioService.audioPlayer.duration != null) {
+    if (current?.id == song.id && audioService.audioPlayer.duration != null) {
       if (mounted) {
         setState(() {
           isPlaying = audioService.audioPlayer.playing;
@@ -208,8 +207,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!mounted) return;
 
       setState(() {
-        isFavorite =
-            LibraryService.instance.isLiked(song.id);
+        isFavorite = LibraryService.instance.isLiked(song.id);
       });
     } catch (e) {
       debugPrint('Start Song Error: $e');
@@ -229,9 +227,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _durationSub?.cancel();
 
     // ValueNotifier listener is removed separately.
-    audioService.currentSong.removeListener(
-      _onCurrentSongChanged,
-    );
+    audioService.currentSong.removeListener(_onCurrentSongChanged);
 
     super.dispose();
   }
@@ -291,8 +287,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final random = Random();
 
       do {
-        nextIndex =
-            random.nextInt(widget.playlist.length);
+        nextIndex = random.nextInt(widget.playlist.length);
       } while (nextIndex == currentIndex);
     } else {
       if (currentIndex >= widget.playlist.length - 1) {
@@ -361,8 +356,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         totalDuration = Duration.zero;
         isPlaying = false;
         _completionHandled = false;
-        isFavorite =
-            LibraryService.instance.isLiked(song.id);
+        isFavorite = LibraryService.instance.isLiked(song.id);
       });
     }
 
@@ -433,8 +427,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // ============================================================
 
   Future<void> toggleFavorite() async {
-    final liked =
-    await LibraryService.instance.toggleLike(activeSong);
+    final liked = await LibraryService.instance.toggleLike(activeSong);
 
     if (!mounted) return;
 
@@ -452,9 +445,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '${decodeHtml(activeSong.title)} added to queue',
-        ),
+        content: Text('${decodeHtml(activeSong.title)} added to queue'),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -465,9 +456,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '${decodeHtml(activeSong.title)} will play next',
-        ),
+        content: Text('${decodeHtml(activeSong.title)} will play next'),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -479,9 +468,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: const Color(0xff111111),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(26),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (context) {
         return ValueListenableBuilder<List<Song>>(
@@ -489,8 +476,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           builder: (context, queue, _) {
             return SafeArea(
               child: SizedBox(
-                height:
-                MediaQuery.of(context).size.height * .65,
+                height: MediaQuery.of(context).size.height * .65,
                 child: Column(
                   children: [
                     const SizedBox(height: 12),
@@ -500,17 +486,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: Colors.white24,
-                        borderRadius:
-                        BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         children: [
                           Text(
@@ -537,23 +520,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           if (queue.isNotEmpty)
                             TextButton(
                               onPressed: () {
-                                audioService
-                                    .clearQueueItems();
+                                audioService.clearQueueItems();
                               },
                               child: const Text(
                                 'Clear',
-                                style: TextStyle(
-                                  color: Color(0xffA78BFA),
-                                ),
+                                style: TextStyle(color: Color(0xffA78BFA)),
                               ),
                             ),
                         ],
                       ),
                     ),
 
-                    const Divider(
-                      color: Colors.white10,
-                    ),
+                    const Divider(color: Colors.white10),
 
                     if (queue.isEmpty)
                       Expanded(
@@ -581,91 +559,59 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     else
                       Expanded(
                         child: ListView.builder(
-                          padding:
-                          const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.only(bottom: 20),
                           itemCount: queue.length,
                           itemBuilder: (context, index) {
-                            final queuedSong =
-                            queue[index];
+                            final queuedSong = queue[index];
 
                             return ListTile(
-                              contentPadding:
-                              const EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 18,
                                 vertical: 4,
                               ),
                               leading: ClipRRect(
-                                borderRadius:
-                                BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(10),
                                 child: SizedBox(
                                   width: 52,
                                   height: 52,
-                                  child:
-                                  queuedSong.thumbnail
-                                      .trim()
-                                      .isEmpty
+                                  child: queuedSong.thumbnail.trim().isEmpty
                                       ? Container(
-                                    color:
-                                    const Color(
-                                      0xff252525,
-                                    ),
-                                    child:
-                                    const Icon(
-                                      Icons
-                                          .music_note_rounded,
-                                      color: Colors
-                                          .white54,
-                                    ),
-                                  )
+                                          color: const Color(0xff252525),
+                                          child: const Icon(
+                                            Icons.music_note_rounded,
+                                            color: Colors.white54,
+                                          ),
+                                        )
                                       : Image.network(
-                                    queuedSong
-                                        .thumbnail,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 104,
-                                    cacheHeight: 104,
-                                    errorBuilder:
-                                        (
-                                        _,
-                                        __,
-                                        ___,
-                                        ) =>
-                                        Container(
-                                          color:
-                                          const Color(
-                                            0xff252525,
-                                          ),
-                                          child:
-                                          const Icon(
-                                            Icons
-                                                .music_note_rounded,
-                                            color: Colors
-                                                .white54,
-                                          ),
+                                          queuedSong.thumbnail,
+                                          fit: BoxFit.cover,
+                                          cacheWidth: 104,
+                                          cacheHeight: 104,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                                color: const Color(0xff252525),
+                                                child: const Icon(
+                                                  Icons.music_note_rounded,
+                                                  color: Colors.white54,
+                                                ),
+                                              ),
                                         ),
-                                  ),
                                 ),
                               ),
                               title: Text(
-                                decodeHtml(
-                                  queuedSong.title,
-                                ),
+                                decodeHtml(queuedSong.title),
                                 maxLines: 1,
-                                overflow:
-                                TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.poppins(
                                   color: Colors.white,
                                   fontSize: 13,
-                                  fontWeight:
-                                  FontWeight.w600,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               subtitle: Text(
-                                decodeHtml(
-                                  queuedSong.artist,
-                                ),
+                                decodeHtml(queuedSong.artist),
                                 maxLines: 1,
-                                overflow:
-                                TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.poppins(
                                   color: Colors.white54,
                                   fontSize: 11,
@@ -673,10 +619,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                               trailing: IconButton(
                                 onPressed: () {
-                                  audioService
-                                      .removeFromQueue(
-                                    queuedSong,
-                                  );
+                                  audioService.removeFromQueue(queuedSong);
                                 },
                                 icon: const Icon(
                                   Icons.close_rounded,
@@ -729,9 +672,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         body: Center(
           child: Text(
             'No song available',
-            style: TextStyle(
-              color: Colors.white,
-            ),
+            style: TextStyle(color: Colors.white),
           ),
         ),
       );
@@ -739,8 +680,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final song = activeSong;
 
-    final height =
-        MediaQuery.of(context).size.height;
+    final height = MediaQuery.of(context).size.height;
 
     final albumSize = height < 700
         ? height * .39
@@ -752,9 +692,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ? 1.0
         : totalDuration.inSeconds.toDouble();
 
-    final sliderValue = currentPosition.inSeconds
-        .toDouble()
-        .clamp(0.0, maxValue);
+    final sliderValue = currentPosition.inSeconds.toDouble().clamp(
+      0.0,
+      maxValue,
+    );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -797,15 +738,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         right: -6,
                         top: -6,
                         child: Container(
-                          constraints:
-                          const BoxConstraints(
+                          constraints: const BoxConstraints(
                             minWidth: 17,
                             minHeight: 17,
                           ),
-                          padding:
-                          const EdgeInsets.symmetric(
-                            horizontal: 4,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
                           decoration: const BoxDecoration(
                             color: Color(0xff8B5CF6),
                             shape: BoxShape.circle,
@@ -830,43 +767,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding:
-          const EdgeInsets.fromLTRB(22, 8, 22, 10),
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 10),
           child: Column(
             children: [
               SizedBox(
                 width: albumSize,
                 height: albumSize,
                 child: ClipRRect(
-                  borderRadius:
-                  BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(28),
                   child: song.thumbnail.trim().isEmpty
                       ? Container(
-                    color:
-                    const Color(0xff181818),
-                    child: const Icon(
-                      Icons.music_note_rounded,
-                      color: Colors.white54,
-                      size: 70,
-                    ),
-                  )
-                      : Image.network(
-                    song.thumbnail,
-                    fit: BoxFit.cover,
-                    cacheWidth: 700,
-                    cacheHeight: 700,
-                    errorBuilder:
-                        (_, __, ___) =>
-                        Container(
-                          color:
-                          const Color(0xff181818),
+                          color: const Color(0xff181818),
                           child: const Icon(
                             Icons.music_note_rounded,
                             color: Colors.white54,
                             size: 70,
                           ),
+                        )
+                      : Image.network(
+                          song.thumbnail,
+                          fit: BoxFit.cover,
+                          cacheWidth: 700,
+                          cacheHeight: 700,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: const Color(0xff181818),
+                            child: const Icon(
+                              Icons.music_note_rounded,
+                              color: Colors.white54,
+                              size: 70,
+                            ),
+                          ),
                         ),
-                  ),
                 ),
               ),
 
@@ -879,8 +810,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
                   color: Colors.white,
-                  fontSize:
-                  height < 700 ? 20 : 22,
+                  fontSize: height < 700 ? 20 : 22,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -891,10 +821,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 decodeHtml(song.artist),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  color: Colors.white54,
-                  fontSize: 15,
-                ),
+                style: GoogleFonts.poppins(color: Colors.white54, fontSize: 15),
               ),
 
               const SizedBox(height: 12),
@@ -906,11 +833,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     child: SizedBox(
                       width: 17,
                       height: 17,
-                      child:
-                      CircularProgressIndicator(
+                      child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color:
-                        Color(0xff8B5CF6),
+                        color: Color(0xff8B5CF6),
                       ),
                     ),
                   ),
@@ -920,44 +845,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   value: sliderValue,
                   min: 0,
                   max: maxValue,
-                  activeColor:
-                  const Color(0xff8B5CF6),
-                  inactiveColor:
-                  Colors.white24,
+                  activeColor: const Color(0xff8B5CF6),
+                  inactiveColor: Colors.white24,
                   onChanged: (value) {
-                    audioService.seek(
-                      Duration(
-                        seconds: value.toInt(),
-                      ),
-                    );
+                    audioService.seek(Duration(seconds: value.toInt()));
                   },
                 ),
 
               Padding(
-                padding:
-                const EdgeInsets.symmetric(
-                  horizontal: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Row(
-                  mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      formatDuration(
-                        currentPosition,
-                      ),
-                      style:
-                      GoogleFonts.poppins(
+                      formatDuration(currentPosition),
+                      style: GoogleFonts.poppins(
                         color: Colors.white54,
                         fontSize: 12,
                       ),
                     ),
                     Text(
-                      formatDuration(
-                        totalDuration,
-                      ),
-                      style:
-                      GoogleFonts.poppins(
+                      formatDuration(totalDuration),
+                      style: GoogleFonts.poppins(
                         color: Colors.white54,
                         fontSize: 12,
                       ),
@@ -969,17 +878,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
               const Spacer(),
 
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   IconButton(
-                    onPressed:
-                    isLoadingSong
-                        ? null
-                        : playPrevious,
+                    onPressed: isLoadingSong ? null : playPrevious,
                     icon: const Icon(
-                      Icons
-                          .skip_previous_rounded,
+                      Icons.skip_previous_rounded,
                       color: Colors.white,
                       size: 42,
                     ),
@@ -988,23 +892,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   Container(
                     width: 78,
                     height: 78,
-                    decoration:
-                    const BoxDecoration(
-                      color:
-                      Color(0xff8B5CF6),
+                    decoration: const BoxDecoration(
+                      color: Color(0xff8B5CF6),
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      onPressed:
-                      isLoadingSong
-                          ? null
-                          : togglePlayPause,
+                      onPressed: isLoadingSong ? null : togglePlayPause,
                       icon: Icon(
                         isPlaying
-                            ? Icons
-                            .pause_rounded
-                            : Icons
-                            .play_arrow_rounded,
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
                         color: Colors.white,
                         size: 42,
                       ),
@@ -1012,13 +909,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
 
                   IconButton(
-                    onPressed:
-                    isLoadingSong
-                        ? null
-                        : playNext,
+                    onPressed: isLoadingSong ? null : playNext,
                     icon: const Icon(
-                      Icons
-                          .skip_next_rounded,
+                      Icons.skip_next_rounded,
                       color: Colors.white,
                       size: 42,
                     ),
@@ -1029,20 +922,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
               const SizedBox(height: 14),
 
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _control(
-                    Icons.shuffle_rounded,
-                    isShuffle,
-                    toggleShuffle,
-                  ),
+                  _control(Icons.shuffle_rounded, isShuffle, toggleShuffle),
 
                   const SizedBox(width: 8),
 
                   _control(
-                    Icons
-                        .playlist_add_rounded,
+                    Icons.playlist_add_rounded,
                     false,
                     addCurrentToQueue,
                   ),
@@ -1050,8 +937,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   const SizedBox(width: 8),
 
                   _control(
-                    Icons
-                        .playlist_play_rounded,
+                    Icons.playlist_play_rounded,
                     false,
                     addCurrentToQueueNext,
                   ),
@@ -1061,8 +947,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   _control(
                     isFavorite
                         ? Icons.favorite_rounded
-                        : Icons
-                        .favorite_border_rounded,
+                        : Icons.favorite_border_rounded,
                     isFavorite,
                     toggleFavorite,
                   ),
@@ -1071,8 +956,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                   _control(
                     repeatMode == 2
-                        ? Icons
-                        .repeat_one_rounded
+                        ? Icons.repeat_one_rounded
                         : Icons.repeat_rounded,
                     repeatMode != 0,
                     toggleRepeat,
@@ -1086,38 +970,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _control(
-      IconData icon,
-      bool active,
-      VoidCallback onTap,
-      ) {
+  Widget _control(IconData icon, bool active, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius:
-      BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(18),
       child: AnimatedContainer(
-        duration:
-        const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 220),
         width: 48,
         height: 48,
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xff8B5CF6)
-              .withValues(alpha: .16)
+              ? const Color(0xff8B5CF6).withValues(alpha: .16)
               : const Color(0xff151515),
-          borderRadius:
-          BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: active
-                ? const Color(0xff8B5CF6)
-                : Colors.white12,
+            color: active ? const Color(0xff8B5CF6) : Colors.white12,
           ),
         ),
         child: Icon(
           icon,
-          color: active
-              ? const Color(0xffA87CFF)
-              : Colors.white60,
+          color: active ? const Color(0xffA87CFF) : Colors.white60,
           size: 22,
         ),
       ),
