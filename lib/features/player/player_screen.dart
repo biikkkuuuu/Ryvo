@@ -9,6 +9,8 @@ import 'package:music_app/models/song.dart';
 import 'package:music_app/services/audio_service.dart';
 import 'package:music_app/services/library_service.dart';
 
+import '../../services/lyrics_service.dart';
+
 class PlayerScreen extends StatefulWidget {
   final String title;
   final String artist;
@@ -33,6 +35,7 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   final AudioService audioService = AudioService();
+  final LyricsService lyricsService = LyricsService();
 
   late int currentIndex;
   late Song activeSong;
@@ -50,7 +53,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   StreamSubscription<PlayerState>? _stateSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
-  StreamSubscription<Song?>? _songSub;
 
   bool _completionHandled = false;
 
@@ -63,11 +65,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     activeSong = widget.playlist.isNotEmpty
         ? widget.playlist[currentIndex]
         : Song(
-      id: widget.songId,
-      title: widget.title,
-      artist: widget.artist,
-      thumbnail: widget.image,
-    );
+            id: widget.songId,
+            title: widget.title,
+            artist: widget.artist,
+            thumbnail: widget.image,
+          );
 
     _initialize();
   }
@@ -83,13 +85,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     _listenToPlayer();
 
-    // Keep the global playback queue in sync with this PlayerScreen.
-    // Required for notification / mini-player Next.
     audioService.setPlaybackQueue(widget.playlist, currentIndex: currentIndex);
 
     final current = audioService.currentSong.value;
 
-    // Opening Player from Mini Player must not restart the song.
     if (current?.id == activeSong.id &&
         audioService.audioPlayer.duration != null) {
       if (!mounted) return;
@@ -141,6 +140,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         isLoadingSong = false;
       });
     });
+
+    audioService.currentSong.addListener(_onCurrentSongChanged);
   }
 
   @override
@@ -148,7 +149,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _stateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
-    _songSub?.cancel();
 
     audioService.currentSong.removeListener(_onCurrentSongChanged);
 
@@ -161,7 +161,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!mounted || song == null) return;
 
     final playlistIndex = widget.playlist.indexWhere(
-          (item) => item.id == song.id,
+      (item) => item.id == song.id,
     );
 
     setState(() {
@@ -206,6 +206,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } catch (e) {
       debugPrint('Play/Pause Error: $e');
     }
+  }
+
+  // ============================================================
+  // LYRICS
+  // ============================================================
+
+  Future<void> showLyrics() async {
+    final title = decodeHtml(activeSong.title);
+    final artist = decodeHtml(activeSong.artist);
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xff0f0f0f),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) {
+        return _LyricsSheet(
+          lyricsService: lyricsService,
+          title: title,
+          artist: artist,
+          positionStream: audioService.positionStream,
+        );
+      },
+    );
   }
 
   // ============================================================
@@ -270,7 +298,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> playNext() async {
     if (isLoadingSong) return;
 
-    // Queue has priority.
     if (audioService.queue.value.isNotEmpty) {
       await audioService.skipToNext();
       return;
@@ -365,9 +392,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         title: decodeHtml(song.title),
         artist: decodeHtml(song.artist),
         image: song.thumbnail,
-
-        // Manual next/previous must NOT destroy
-        // an existing queue.
         clearQueue: false,
       );
     } catch (e) {
@@ -388,7 +412,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> handleSongCompleted() async {
     if (!mounted) return;
 
-    // Queue gets priority.
     if (audioService.queue.value.isNotEmpty) {
       await audioService.skipToNext();
       return;
@@ -478,7 +501,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 12),
-
                     Container(
                       width: 42,
                       height: 4,
@@ -487,9 +509,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-
                     const SizedBox(height: 18),
-
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
@@ -524,9 +544,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ],
                       ),
                     ),
-
                     const Divider(color: Colors.white10),
-
                     if (queue.isEmpty)
                       Expanded(
                         child: Center(
@@ -570,26 +588,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   height: 52,
                                   child: queuedSong.thumbnail.trim().isEmpty
                                       ? Container(
-                                    color: const Color(0xff252525),
-                                    child: const Icon(
-                                      Icons.music_note_rounded,
-                                      color: Colors.white54,
-                                    ),
-                                  )
-                                      : Image.network(
-                                    queuedSong.thumbnail,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 104,
-                                    cacheHeight: 104,
-                                    errorBuilder: (_, __, ___) =>
-                                        Container(
                                           color: const Color(0xff252525),
                                           child: const Icon(
                                             Icons.music_note_rounded,
                                             color: Colors.white54,
                                           ),
+                                        )
+                                      : Image.network(
+                                          queuedSong.thumbnail,
+                                          fit: BoxFit.cover,
+                                          cacheWidth: 104,
+                                          cacheHeight: 104,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                                color: const Color(0xff252525),
+                                                child: const Icon(
+                                                  Icons.music_note_rounded,
+                                                  color: Colors.white54,
+                                                ),
+                                              ),
                                         ),
-                                  ),
                                 ),
                               ),
                               title: Text(
@@ -676,10 +694,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final height = MediaQuery.of(context).size.height;
 
-    // Body now extends behind the AppBar, and we manually push content
-    // down by the AppBar's height, so that space must be subtracted here
-    // or the album art + controls no longer fit and overflow at the bottom.
     final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
+
     final availableHeight = height - topInset;
 
     final albumSize = availableHeight < 700
@@ -720,6 +736,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Lyrics',
+            onPressed: showLyrics,
+            icon: const Icon(
+              Icons.lyrics_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
           IconButton(
             tooltip: 'Queue',
             onPressed: showQueue,
@@ -769,18 +794,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
       // ============================================================
       // BLURRED ALBUM ART BACKGROUND
-      // Matched to reference design: soft, colorful blur with only a
-      // light darkening gradient (heavy at bottom, almost none at top)
-      // so the album art's own colors stay visible through the blur
-      // instead of being crushed by a near-black overlay.
       // ============================================================
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Base fallback color behind the blurred image while it loads.
-          Positioned.fill(
-            child: Container(color: const Color(0xff0d0d0d)),
-          ),
+          Positioned.fill(child: Container(color: const Color(0xff0d0d0d))),
 
           Positioned.fill(
             child: ImageFiltered(
@@ -788,14 +806,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
               child: Image.network(
                 song.thumbnail,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Container(color: const Color(0xff0d0d0d)),
+                errorBuilder: (_, __, ___) {
+                  return Container(color: const Color(0xff0d0d0d));
+                },
               ),
             ),
           ),
 
-          // Light, mostly-bottom darkening — keeps text/controls
-          // readable without turning the whole screen black.
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -819,9 +836,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
               padding: const EdgeInsets.fromLTRB(22, 8, 22, 10),
               child: Column(
                 children: [
-                  // Body now draws behind the transparent AppBar (for the
-                  // background to cover the status bar / AppBar area too),
-                  // so push the visible content down by the AppBar's height.
                   SizedBox(height: kToolbarHeight),
 
                   SizedBox(
@@ -831,27 +845,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       borderRadius: BorderRadius.circular(28),
                       child: song.thumbnail.trim().isEmpty
                           ? Container(
-                        color: const Color(0xff181818),
-                        child: const Icon(
-                          Icons.music_note_rounded,
-                          color: Colors.white54,
-                          size: 70,
-                        ),
-                      )
+                              color: const Color(0xff181818),
+                              child: const Icon(
+                                Icons.music_note_rounded,
+                                color: Colors.white54,
+                                size: 70,
+                              ),
+                            )
                           : Image.network(
-                        song.thumbnail,
-                        fit: BoxFit.cover,
-                        cacheWidth: 700,
-                        cacheHeight: 700,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: const Color(0xff181818),
-                          child: const Icon(
-                            Icons.music_note_rounded,
-                            color: Colors.white54,
-                            size: 70,
-                          ),
-                        ),
-                      ),
+                              song.thumbnail,
+                              fit: BoxFit.cover,
+                              cacheWidth: 700,
+                              cacheHeight: 700,
+                              errorBuilder: (_, __, ___) {
+                                return Container(
+                                  color: const Color(0xff181818),
+                                  child: const Icon(
+                                    Icons.music_note_rounded,
+                                    color: Colors.white54,
+                                    size: 70,
+                                  ),
+                                );
+                              },
+                            ),
                     ),
                   ),
 
@@ -1053,5 +1069,403 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       ),
     );
+  }
+}
+
+// ================================================================
+// LYRICS SHEET
+// ================================================================
+
+class _LyricsSheet extends StatefulWidget {
+  final LyricsService lyricsService;
+  final String title;
+  final String artist;
+  final Stream<Duration> positionStream;
+
+  const _LyricsSheet({
+    required this.lyricsService,
+    required this.title,
+    required this.artist,
+    required this.positionStream,
+  });
+
+  @override
+  State<_LyricsSheet> createState() => _LyricsSheetState();
+}
+
+class _LyricsSheetState extends State<_LyricsSheet> {
+  late Future<LyricsResult?> _lyricsFuture;
+  StreamSubscription<Duration>? _positionSub;
+  Duration _currentPosition = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _lyricsFuture = widget.lyricsService.getLyrics(
+      title: widget.title,
+      artist: widget.artist,
+    );
+
+    _positionSub = widget.positionStream.listen((position) {
+      if (!mounted) return;
+
+      setState(() {
+        _currentPosition = position;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * .78,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.lyrics_rounded,
+                    color: Color(0xffA87CFF),
+                    size: 26,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Lyrics',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          widget.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(color: Colors.white10, height: 1),
+            Expanded(
+              child: FutureBuilder<LyricsResult?>(
+                future: _lyricsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xff8B5CF6),
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError ||
+                      !snapshot.hasData ||
+                      snapshot.data == null) {
+                    return _emptyLyrics();
+                  }
+
+                  final lyrics = snapshot.data!;
+                  final synced = lyrics.syncedLyrics;
+
+                  if (synced != null && synced.trim().isNotEmpty) {
+                    return _SyncedLyricsView(
+                      lyrics: synced,
+                      currentPosition: _currentPosition,
+                    );
+                  }
+
+                  if (lyrics.plainLyrics.trim().isNotEmpty) {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                      child: Text(
+                        lyrics.plainLyrics,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 17,
+                          height: 1.8,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return _emptyLyrics();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyLyrics() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.lyrics_outlined, color: Colors.white30, size: 60),
+            const SizedBox(height: 16),
+            Text(
+              'Lyrics not available',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Lyrics could not be found for this song.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(color: Colors.white54, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================================================================
+// SYNCED LYRICS
+// ================================================================
+
+class _SyncedLyricLine {
+  final Duration time;
+  final String text;
+
+  const _SyncedLyricLine({required this.time, required this.text});
+}
+
+class _SyncedLyricsView extends StatefulWidget {
+  final String lyrics;
+  final Duration currentPosition;
+
+  const _SyncedLyricsView({
+    required this.lyrics,
+    required this.currentPosition,
+  });
+
+  @override
+  State<_SyncedLyricsView> createState() => _SyncedLyricsViewState();
+}
+
+class _SyncedLyricsViewState extends State<_SyncedLyricsView> {
+  late List<_SyncedLyricLine> lines;
+
+  final ScrollController _scrollController = ScrollController();
+  int _lastActiveIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    lines = _parseLyrics(widget.lyrics);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateActiveLine(force: true);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _SyncedLyricsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.lyrics != widget.lyrics) {
+      lines = _parseLyrics(widget.lyrics);
+      _lastActiveIndex = -1;
+    }
+
+    _updateActiveLine();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (lines.isEmpty) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        child: Text(
+          widget.lyrics,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 17,
+            height: 1.8,
+          ),
+        ),
+      );
+    }
+
+    final currentIndex = _activeIndex();
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(22, 110, 22, 180),
+      itemCount: lines.length,
+      itemBuilder: (context, index) {
+        final isActive = index == currentIndex;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          margin: const EdgeInsets.symmetric(vertical: 9),
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            style: GoogleFonts.poppins(
+              color: isActive ? Colors.white : Colors.white38,
+              fontSize: isActive ? 21 : 16,
+              height: 1.5,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+            child: Text(lines[index].text),
+          ),
+        );
+      },
+    );
+  }
+
+  int _activeIndex() {
+    var active = -1;
+
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].time <= widget.currentPosition) {
+        active = i;
+      } else {
+        break;
+      }
+    }
+
+    return active;
+  }
+
+  void _updateActiveLine({bool force = false}) {
+    if (!mounted) return;
+
+    final index = _activeIndex();
+
+    if (!force && index == _lastActiveIndex) {
+      return;
+    }
+
+    _lastActiveIndex = index;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToActiveLine(index);
+    });
+  }
+
+  void _scrollToActiveLine(int index) {
+    if (index < 0 || !_scrollController.hasClients) {
+      return;
+    }
+
+    final viewportHeight = _scrollController.position.viewportDimension;
+
+    const itemHeight = 55.0;
+
+    final target =
+        (index * itemHeight) - (viewportHeight * 0.5) + (itemHeight * 0.5);
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+
+    _scrollController.animateTo(
+      target.clamp(0.0, maxScroll),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+  }
+
+  List<_SyncedLyricLine> _parseLyrics(String raw) {
+    final result = <_SyncedLyricLine>[];
+
+    final regex = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]\s*(.*)');
+
+    for (final rawLine in raw.split('\n')) {
+      final match = regex.firstMatch(rawLine);
+
+      if (match == null) continue;
+
+      final minutes = int.tryParse(match.group(1) ?? '');
+      final seconds = int.tryParse(match.group(2) ?? '');
+
+      if (minutes == null || seconds == null) continue;
+
+      final fractionText = match.group(3);
+      var milliseconds = 0;
+
+      if (fractionText != null && fractionText.isNotEmpty) {
+        if (fractionText.length == 1) {
+          milliseconds = int.parse(fractionText) * 100;
+        } else if (fractionText.length == 2) {
+          milliseconds = int.parse(fractionText) * 10;
+        } else {
+          milliseconds = int.parse(fractionText.substring(0, 3));
+        }
+      }
+
+      final lyricText = match.group(4)?.trim() ?? '';
+
+      if (lyricText.isEmpty) continue;
+
+      result.add(
+        _SyncedLyricLine(
+          time: Duration(
+            minutes: minutes,
+            seconds: seconds,
+            milliseconds: milliseconds,
+          ),
+          text: lyricText,
+        ),
+      );
+    }
+
+    result.sort((a, b) => a.time.compareTo(b.time));
+
+    return result;
   }
 }
