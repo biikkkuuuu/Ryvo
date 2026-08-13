@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -62,11 +63,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     activeSong = widget.playlist.isNotEmpty
         ? widget.playlist[currentIndex]
         : Song(
-            id: widget.songId,
-            title: widget.title,
-            artist: widget.artist,
-            thumbnail: widget.image,
-          );
+      id: widget.songId,
+      title: widget.title,
+      artist: widget.artist,
+      thumbnail: widget.image,
+    );
 
     _initialize();
   }
@@ -107,10 +108,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _listenToPlayer() {
-    _songSub =
-        audioService.currentSong.addListener(_onCurrentSongChanged)
-            as StreamSubscription<Song?>?;
-
     _stateSub = audioService.playerStateStream.listen((state) {
       if (!mounted) return;
 
@@ -146,13 +143,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _stateSub?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
+    _songSub?.cancel();
+
+    audioService.currentSong.removeListener(_onCurrentSongChanged);
+
+    super.dispose();
+  }
+
   void _onCurrentSongChanged() {
     final song = audioService.currentSong.value;
 
     if (!mounted || song == null) return;
 
     final playlistIndex = widget.playlist.indexWhere(
-      (item) => item.id == song.id,
+          (item) => item.id == song.id,
     );
 
     setState(() {
@@ -163,16 +172,50 @@ class _PlayerScreenState extends State<PlayerScreen> {
       }
 
       isFavorite = LibraryService.instance.isLiked(song.id);
-
       isLoadingSong = false;
     });
   }
+
+  String decodeHtml(String text) {
+    return text
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#34;', '"')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&#38;', '&')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&#x27;', "'");
+  }
+
+  String formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> togglePlayPause() async {
+    try {
+      if (audioService.audioPlayer.playing) {
+        await audioService.pause();
+      } else {
+        await audioService.resume();
+      }
+    } catch (e) {
+      debugPrint('Play/Pause Error: $e');
+    }
+  }
+
+  // ============================================================
+  // START SONG
+  // ============================================================
 
   Future<void> startSong() async {
     if (widget.playlist.isEmpty) return;
 
     final song = activeSong;
-
     final current = audioService.currentSong.value;
 
     if (current?.id == song.id && audioService.audioPlayer.duration != null) {
@@ -217,50 +260,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
           isLoadingSong = false;
         });
       }
-    }
-  }
-
-  @override
-  void dispose() {
-    _stateSub?.cancel();
-    _positionSub?.cancel();
-    _durationSub?.cancel();
-
-    // ValueNotifier listener is removed separately.
-    audioService.currentSong.removeListener(_onCurrentSongChanged);
-
-    super.dispose();
-  }
-
-  String decodeHtml(String text) {
-    return text
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#34;', '"')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&#38;', '&')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&#x27;', "'");
-  }
-
-  String formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> togglePlayPause() async {
-    try {
-      if (audioService.audioPlayer.playing) {
-        await audioService.pause();
-      } else {
-        await audioService.resume();
-      }
-    } catch (e) {
-      debugPrint('Play/Pause Error: $e');
     }
   }
 
@@ -367,7 +366,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         artist: decodeHtml(song.artist),
         image: song.thumbnail,
 
-        // Important:
         // Manual next/previous must NOT destroy
         // an existing queue.
         clearQueue: false,
@@ -504,9 +502,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-
                           const SizedBox(width: 8),
-
                           Text(
                             '(${queue.length})',
                             style: GoogleFonts.poppins(
@@ -514,9 +510,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               fontSize: 14,
                             ),
                           ),
-
                           const Spacer(),
-
                           if (queue.isNotEmpty)
                             TextButton(
                               onPressed: () {
@@ -576,26 +570,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   height: 52,
                                   child: queuedSong.thumbnail.trim().isEmpty
                                       ? Container(
+                                    color: const Color(0xff252525),
+                                    child: const Icon(
+                                      Icons.music_note_rounded,
+                                      color: Colors.white54,
+                                    ),
+                                  )
+                                      : Image.network(
+                                    queuedSong.thumbnail,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 104,
+                                    cacheHeight: 104,
+                                    errorBuilder: (_, __, ___) =>
+                                        Container(
                                           color: const Color(0xff252525),
                                           child: const Icon(
                                             Icons.music_note_rounded,
                                             color: Colors.white54,
                                           ),
-                                        )
-                                      : Image.network(
-                                          queuedSong.thumbnail,
-                                          fit: BoxFit.cover,
-                                          cacheWidth: 104,
-                                          cacheHeight: 104,
-                                          errorBuilder: (_, __, ___) =>
-                                              Container(
-                                                color: const Color(0xff252525),
-                                                child: const Icon(
-                                                  Icons.music_note_rounded,
-                                                  color: Colors.white54,
-                                                ),
-                                              ),
                                         ),
+                                  ),
                                 ),
                               ),
                               title: Text(
@@ -682,11 +676,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     final height = MediaQuery.of(context).size.height;
 
-    final albumSize = height < 700
-        ? height * .39
-        : height < 800
-        ? height * .42
-        : height * .46;
+    // Body now extends behind the AppBar, and we manually push content
+    // down by the AppBar's height, so that space must be subtracted here
+    // or the album art + controls no longer fit and overflow at the bottom.
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
+    final availableHeight = height - topInset;
+
+    final albumSize = availableHeight < 700
+        ? availableHeight * .39
+        : availableHeight < 800
+        ? availableHeight * .42
+        : availableHeight * .46;
 
     final maxValue = totalDuration.inSeconds <= 0
         ? 1.0
@@ -699,8 +699,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -765,207 +766,265 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 8, 22, 10),
-          child: Column(
-            children: [
-              SizedBox(
-                width: albumSize,
-                height: albumSize,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: song.thumbnail.trim().isEmpty
-                      ? Container(
+
+      // ============================================================
+      // BLURRED ALBUM ART BACKGROUND
+      // Matched to reference design: soft, colorful blur with only a
+      // light darkening gradient (heavy at bottom, almost none at top)
+      // so the album art's own colors stay visible through the blur
+      // instead of being crushed by a near-black overlay.
+      // ============================================================
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Base fallback color behind the blurred image while it loads.
+          Positioned.fill(
+            child: Container(color: const Color(0xff0d0d0d)),
+          ),
+
+          Positioned.fill(
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 45, sigmaY: 45),
+              child: Image.network(
+                song.thumbnail,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    Container(color: const Color(0xff0d0d0d)),
+              ),
+            ),
+          ),
+
+          // Light, mostly-bottom darkening — keeps text/controls
+          // readable without turning the whole screen black.
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.05),
+                    Colors.black.withValues(alpha: 0.20),
+                    Colors.black.withValues(alpha: 0.45),
+                    Colors.black.withValues(alpha: 0.70),
+                  ],
+                  stops: const [0.0, 0.35, 0.7, 1.0],
+                ),
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 8, 22, 10),
+              child: Column(
+                children: [
+                  // Body now draws behind the transparent AppBar (for the
+                  // background to cover the status bar / AppBar area too),
+                  // so push the visible content down by the AppBar's height.
+                  SizedBox(height: kToolbarHeight),
+
+                  SizedBox(
+                    width: albumSize,
+                    height: albumSize,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: song.thumbnail.trim().isEmpty
+                          ? Container(
+                        color: const Color(0xff181818),
+                        child: const Icon(
+                          Icons.music_note_rounded,
+                          color: Colors.white54,
+                          size: 70,
+                        ),
+                      )
+                          : Image.network(
+                        song.thumbnail,
+                        fit: BoxFit.cover,
+                        cacheWidth: 700,
+                        cacheHeight: 700,
+                        errorBuilder: (_, __, ___) => Container(
                           color: const Color(0xff181818),
                           child: const Icon(
                             Icons.music_note_rounded,
                             color: Colors.white54,
                             size: 70,
                           ),
-                        )
-                      : Image.network(
-                          song.thumbnail,
-                          fit: BoxFit.cover,
-                          cacheWidth: 700,
-                          cacheHeight: 700,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: const Color(0xff181818),
-                            child: const Icon(
-                              Icons.music_note_rounded,
-                              color: Colors.white54,
-                              size: 70,
-                            ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  Text(
+                    decodeHtml(song.title),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: availableHeight < 700 ? 20 : 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  Text(
+                    decodeHtml(song.artist),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white54,
+                      fontSize: 15,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (isLoadingSong)
+                    const SizedBox(
+                      height: 38,
+                      child: Center(
+                        child: SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xff8B5CF6),
                           ),
                         ),
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              Text(
-                decodeHtml(song.title),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: height < 700 ? 20 : 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-
-              const SizedBox(height: 5),
-
-              Text(
-                decodeHtml(song.artist),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(color: Colors.white54, fontSize: 15),
-              ),
-
-              const SizedBox(height: 12),
-
-              if (isLoadingSong)
-                const SizedBox(
-                  height: 38,
-                  child: Center(
-                    child: SizedBox(
-                      width: 17,
-                      height: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xff8B5CF6),
                       ),
+                    )
+                  else
+                    Slider(
+                      value: sliderValue,
+                      min: 0,
+                      max: maxValue,
+                      activeColor: const Color(0xff8B5CF6),
+                      inactiveColor: Colors.white24,
+                      onChanged: (value) {
+                        audioService.seek(Duration(seconds: value.toInt()));
+                      },
                     ),
-                  ),
-                )
-              else
-                Slider(
-                  value: sliderValue,
-                  min: 0,
-                  max: maxValue,
-                  activeColor: const Color(0xff8B5CF6),
-                  inactiveColor: Colors.white24,
-                  onChanged: (value) {
-                    audioService.seek(Duration(seconds: value.toInt()));
-                  },
-                ),
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      formatDuration(currentPosition),
-                      style: GoogleFonts.poppins(
-                        color: Colors.white54,
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      formatDuration(totalDuration),
-                      style: GoogleFonts.poppins(
-                        color: Colors.white54,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const Spacer(),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    onPressed: isLoadingSong ? null : playPrevious,
-                    icon: const Icon(
-                      Icons.skip_previous_rounded,
-                      color: Colors.white,
-                      size: 42,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          formatDuration(currentPosition),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          formatDuration(totalDuration),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  Container(
-                    width: 78,
-                    height: 78,
-                    decoration: const BoxDecoration(
-                      color: Color(0xff8B5CF6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: isLoadingSong ? null : togglePlayPause,
-                      icon: Icon(
-                        isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 42,
+                  const Spacer(),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      IconButton(
+                        onPressed: isLoadingSong ? null : playPrevious,
+                        icon: const Icon(
+                          Icons.skip_previous_rounded,
+                          color: Colors.white,
+                          size: 42,
+                        ),
                       ),
-                    ),
+
+                      Container(
+                        width: 78,
+                        height: 78,
+                        decoration: const BoxDecoration(
+                          color: Color(0xff8B5CF6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          onPressed: isLoadingSong ? null : togglePlayPause,
+                          icon: Icon(
+                            isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 42,
+                          ),
+                        ),
+                      ),
+
+                      IconButton(
+                        onPressed: isLoadingSong ? null : playNext,
+                        icon: const Icon(
+                          Icons.skip_next_rounded,
+                          color: Colors.white,
+                          size: 42,
+                        ),
+                      ),
+                    ],
                   ),
 
-                  IconButton(
-                    onPressed: isLoadingSong ? null : playNext,
-                    icon: const Icon(
-                      Icons.skip_next_rounded,
-                      color: Colors.white,
-                      size: 42,
-                    ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _control(Icons.shuffle_rounded, isShuffle, toggleShuffle),
+
+                      const SizedBox(width: 8),
+
+                      _control(
+                        Icons.playlist_add_rounded,
+                        false,
+                        addCurrentToQueue,
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      _control(
+                        Icons.playlist_play_rounded,
+                        false,
+                        addCurrentToQueueNext,
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      _control(
+                        isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        isFavorite,
+                        toggleFavorite,
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      _control(
+                        repeatMode == 2
+                            ? Icons.repeat_one_rounded
+                            : Icons.repeat_rounded,
+                        repeatMode != 0,
+                        toggleRepeat,
+                      ),
+                    ],
                   ),
                 ],
               ),
-
-              const SizedBox(height: 14),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _control(Icons.shuffle_rounded, isShuffle, toggleShuffle),
-
-                  const SizedBox(width: 8),
-
-                  _control(
-                    Icons.playlist_add_rounded,
-                    false,
-                    addCurrentToQueue,
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  _control(
-                    Icons.playlist_play_rounded,
-                    false,
-                    addCurrentToQueueNext,
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  _control(
-                    isFavorite
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    isFavorite,
-                    toggleFavorite,
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  _control(
-                    repeatMode == 2
-                        ? Icons.repeat_one_rounded
-                        : Icons.repeat_rounded,
-                    repeatMode != 0,
-                    toggleRepeat,
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
