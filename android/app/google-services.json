@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "479625784257",
+    "project_id": "ryvo-c5d2c",
+    "storage_bucket": "ryvo-c5d2c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479625784257:android:c94f0a135ab167a4805d40",
+        "android_client_info": {
+          "package_name": "com.example.music_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJ9U4LrXZ9rMX0Gkm2oJ3KXfsaLdx01nQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
