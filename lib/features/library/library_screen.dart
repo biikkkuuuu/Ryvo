@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/features/player/player_screen.dart';
+import 'package:music_app/features/playlist/playlist_screen.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/services/audio_service.dart';
 import 'package:music_app/services/library_service.dart';
@@ -17,6 +18,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   List<Song> likedSongs = [];
   List<Song> recentlyPlayed = [];
+  List<String> playlistNames = [];
 
   bool loading = true;
   int selectedTab = 0;
@@ -32,12 +34,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     final liked = await LibraryService.instance.getLikedSongs();
     final recent = await LibraryService.instance.getRecentlyPlayed();
+    final playlists = await LibraryService.instance.getPlaylistNames();
 
     if (!mounted) return;
 
     setState(() {
       likedSongs = liked;
       recentlyPlayed = recent;
+      playlistNames = playlists;
       loading = false;
     });
   }
@@ -98,6 +102,105 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ).then((_) => loadLibrary());
   }
 
+  Future<void> _createPlaylist() async {
+    String playlistName = '';
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xff111416),
+          title: Text(
+            'Create Playlist',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: TextField(
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            onChanged: (value) {
+              playlistName = value;
+            },
+            decoration: InputDecoration(
+              hintText: 'Playlist name',
+              hintStyle: const TextStyle(color: Colors.white38),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.white12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xffA78BFA),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  playlistName.trim(),
+                );
+              },
+              child: const Text(
+                'Create',
+                style: TextStyle(color: Color(0xffA78BFA)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (name == null || name.trim().isEmpty) return;
+
+    final created = await LibraryService.instance.createPlaylist(name);
+
+    if (!mounted) return;
+
+    if (!created) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Playlist already exists or name is invalid.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await loadLibrary();
+  }
+
+  Future<void> _openPlaylist(String name) async {
+    final songs = await LibraryService.instance.getPlaylist(name);
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlaylistScreen(
+          playlistName: name,
+          subtitle: 'Your playlist',
+          icon: Icons.queue_music_rounded,
+          songs: songs,
+        ),
+      ),
+    );
+  }
+
   String decode(String text) {
     return text
         .replaceAll('&quot;', '"')
@@ -118,47 +221,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
       body: SafeArea(
         child: loading
             ? const Center(
-                child: CircularProgressIndicator(color: Color(0xffA78BFA)),
-              )
+          child: CircularProgressIndicator(
+            color: Color(0xffA78BFA),
+          ),
+        )
             : RefreshIndicator(
-                color: const Color(0xffA78BFA),
-                backgroundColor: const Color(0xff111416),
-                onRefresh: loadLibrary,
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          _topBar(),
-
-                          const SizedBox(height: 20),
-
-                          _tabs(),
-
-                          const SizedBox(height: 18),
-
-                          _featureGrid(),
-
-                          const SizedBox(height: 28),
-
-                          if (selectedTab == 0)
-                            _playlistView()
-                          else if (selectedTab == 1)
-                            _songsView()
-                          else
-                            _comingSoonView(
-                              selectedTab == 2 ? 'Albums' : 'Artists',
-                            ),
-                        ]),
+          color: const Color(0xffA78BFA),
+          backgroundColor: const Color(0xff111416),
+          onRefresh: loadLibrary,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _topBar(),
+                    const SizedBox(height: 20),
+                    _tabs(),
+                    const SizedBox(height: 18),
+                    _featureGrid(),
+                    const SizedBox(height: 28),
+                    if (selectedTab == 0)
+                      _playlistView()
+                    else if (selectedTab == 1)
+                      _songsView()
+                    else
+                      _comingSoonView(
+                        selectedTab == 2 ? 'Albums' : 'Artists',
                       ),
-                    ),
-                  ],
+                  ]),
                 ),
               ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -168,7 +267,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       children: [
         IconButton(
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 42, minHeight: 42),
+          constraints: const BoxConstraints(
+            minWidth: 42,
+            minHeight: 42,
+          ),
           onPressed: () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
@@ -234,7 +336,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   style: GoogleFonts.poppins(
                     color: selected ? Colors.white : Colors.white54,
                     fontSize: 12,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight:
+                    selected ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
               ),
@@ -246,54 +349,53 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _featureGrid() {
-  return Column(
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: _featureCard(
-              icon: Icons.favorite_rounded,
-              title: 'Liked',
-              count: likedSongs.length,
-              iconColor: const Color(0xffF472B6),
-              onTap: openLikedSongs,
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _featureCard(
+                icon: Icons.favorite_rounded,
+                title: 'Liked',
+                count: likedSongs.length,
+                iconColor: const Color(0xffF472B6),
+                onTap: openLikedSongs,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _featureCard(
-              icon: Icons.history_rounded,
-              title: 'Recently Played',
-              count: recentlyPlayed.length,
-              iconColor: const Color(0xffA78BFA),
-              onTap: openRecentlyPlayed,
+            const SizedBox(width: 12),
+            Expanded(
+              child: _featureCard(
+                icon: Icons.history_rounded,
+                title: 'Recently Played',
+                count: recentlyPlayed.length,
+                iconColor: const Color(0xffA78BFA),
+                onTap: openRecentlyPlayed,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _featureCard(
+                icon: Icons.queue_music_rounded,
+                title: 'Queue',
+                count: audioService.queue.value.length,
+                iconColor: const Color(0xff8B5CF6),
+                onTap: _showQueue,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: SizedBox(height: 86),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-      const SizedBox(height: 12),
-
-      Row(
-        children: [
-          Expanded(
-            child: _featureCard(
-              icon: Icons.queue_music_rounded,
-              title: 'Queue',
-              count: audioService.queue.value.length,
-              iconColor: const Color(0xff8B5CF6),
-              onTap: _showQueue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: SizedBox(height: 86),
-          ),
-        ],
-      ),
-    ],
-  );
-}
   Widget _featureCard({
     required IconData icon,
     required String title,
@@ -310,7 +412,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
         child: SizedBox(
           height: 86,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             child: Row(
               children: [
                 Container(
@@ -320,11 +425,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     color: iconColor.withValues(alpha: .13),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(icon, color: iconColor, size: 22),
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 22,
+                  ),
                 ),
-
                 const SizedBox(width: 11),
-
                 Expanded(
                   child: Text(
                     title,
@@ -337,7 +444,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                 ),
-
                 if (count != null)
                   Text(
                     '$count',
@@ -358,29 +464,107 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Playlists',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _createPlaylist,
+              icon: const Icon(
+                Icons.add_rounded,
+                color: Color(0xffA78BFA),
+                size: 19,
+              ),
+              label: Text(
+                'Create',
+                style: GoogleFonts.poppins(
+                  color: const Color(0xffA78BFA),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
         Text(
-          'Playlists',
+          playlistNames.isEmpty
+              ? 'Create a playlist to organize your music.'
+              : '${playlistNames.length} playlist${playlistNames.length == 1 ? '' : 's'}',
           style: GoogleFonts.poppins(
-            color: Colors.white,
-            fontSize: 21,
-            fontWeight: FontWeight.w700,
+            color: Colors.white38,
+            fontSize: 11,
           ),
         ),
-
-        const SizedBox(height: 6),
-
-        Text(
-          'Your playlists will appear here.',
-          style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11),
-        ),
-
         const SizedBox(height: 18),
-
-        _emptyCard(
-          icon: Icons.queue_music_rounded,
-          title: 'No playlists yet',
-          subtitle: 'Create playlists to keep your favorite music organized.',
-        ),
+        if (playlistNames.isEmpty)
+          _emptyCard(
+            icon: Icons.queue_music_rounded,
+            title: 'No playlists yet',
+            subtitle:
+            'Create playlists to keep your favorite music organized.',
+          )
+        else
+          ...playlistNames.map(
+                (name) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Material(
+                color: const Color(0xff111416),
+                borderRadius: BorderRadius.circular(18),
+                child: InkWell(
+                  onTap: () => _openPlaylist(name),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: const Color(0xffA78BFA)
+                                .withValues(alpha: .13),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Icon(
+                            Icons.queue_music_rounded,
+                            color: Color(0xffA78BFA),
+                            size: 25,
+                          ),
+                        ),
+                        const SizedBox(width: 13),
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white38,
+                          size: 25,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -410,36 +594,36 @@ class _LibraryScreenState extends State<LibraryScreen> {
           trailing: songs.isEmpty
               ? null
               : TextButton(
-                  onPressed: () async {
-                    if (likedSongs.isNotEmpty) {
-                      await LibraryService.instance.clearLikedSongs();
-                      await loadLibrary();
-                    }
-                  },
-                  child: Text(
-                    'Clear liked',
-                    style: GoogleFonts.poppins(
-                      color: const Color(0xffA78BFA),
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
+            onPressed: () async {
+              if (likedSongs.isNotEmpty) {
+                await LibraryService.instance.clearLikedSongs();
+                await loadLibrary();
+              }
+            },
+            child: Text(
+              'Clear liked',
+              style: GoogleFonts.poppins(
+                color: const Color(0xffA78BFA),
+                fontSize: 11,
+              ),
+            ),
+          ),
         ),
-
         const SizedBox(height: 14),
-
         if (songs.isEmpty)
           _emptyCard(
             icon: Icons.music_note_rounded,
             title: 'No songs yet',
-            subtitle: 'Songs you like or play will appear in your library.',
+            subtitle:
+            'Songs you like or play will appear in your library.',
           )
         else
           ...songs.map(
-            (song) => _songTile(
+                (song) => _songTile(
               song: song,
               playlist: songs,
-              showRemove: likedSongs.any((liked) => liked.id == song.id),
+              showRemove:
+              likedSongs.any((liked) => liked.id == song.id),
             ),
           ),
       ],
@@ -468,7 +652,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11),
+                style: GoogleFonts.poppins(
+                  color: Colors.white38,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -503,19 +690,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     child: song.thumbnail.trim().isEmpty
                         ? _fallbackArt()
                         : Image.network(
-                            song.thumbnail,
-                            fit: BoxFit.cover,
-                            cacheWidth: 112,
-                            cacheHeight: 112,
-                            errorBuilder: (_, __, ___) {
-                              return _fallbackArt();
-                            },
-                          ),
+                      song.thumbnail,
+                      fit: BoxFit.cover,
+                      cacheWidth: 112,
+                      cacheHeight: 112,
+                      errorBuilder: (_, __, ___) {
+                        return _fallbackArt();
+                      },
+                    ),
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,7 +728,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ],
                   ),
                 ),
-
                 IconButton(
                   onPressed: () => openPlayer(song, playlist),
                   icon: const Icon(
@@ -552,7 +736,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     size: 31,
                   ),
                 ),
-
                 if (showRemove)
                   IconButton(
                     onPressed: () => removeLiked(song),
@@ -577,15 +760,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 32,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xff111416),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: .06)),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: .06),
+        ),
       ),
       child: Column(
         children: [
-          Icon(icon, color: Colors.white24, size: 42),
+          Icon(
+            icon,
+            color: Colors.white24,
+            size: 42,
+          ),
           const SizedBox(height: 10),
           Text(
             title,
@@ -600,7 +792,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(color: Colors.white38, fontSize: 10),
+            style: GoogleFonts.poppins(
+              color: Colors.white38,
+              fontSize: 10,
+            ),
           ),
         ],
       ),
@@ -610,7 +805,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget _comingSoonView(String title) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 45),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 45,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xff111416),
         borderRadius: BorderRadius.circular(22),
@@ -635,7 +833,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Text(
             'We will connect this section with real data next.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11),
+            style: GoogleFonts.poppins(
+              color: Colors.white38,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -656,7 +857,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             child: Center(
               child: Text(
                 'Queue is empty',
-                style: GoogleFonts.poppins(color: Colors.white54),
+                style: GoogleFonts.poppins(
+                  color: Colors.white54,
+                ),
               ),
             ),
           );
@@ -678,12 +881,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     child: song.thumbnail.trim().isEmpty
                         ? _fallbackArt()
                         : Image.network(
-                            song.thumbnail,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
-                              return _fallbackArt();
-                            },
-                          ),
+                      song.thumbnail,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) {
+                        return _fallbackArt();
+                      },
+                    ),
                   ),
                 ),
                 title: Text(
@@ -721,10 +924,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xff8B5CF6), Color(0xff312E81)],
+          colors: [
+            Color(0xff8B5CF6),
+            Color(0xff312E81),
+          ],
         ),
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white70),
+      child: const Icon(
+        Icons.music_note_rounded,
+        color: Colors.white70,
+      ),
     );
   }
 }
@@ -844,17 +1053,15 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     _header(isLiked),
-
                     const SizedBox(height: 22),
-
                     _heroHeader(isLiked),
-
                     const SizedBox(height: 18),
-
                     if (songs.isEmpty)
                       _emptyState(isLiked)
                     else
-                      ...songs.map((song) => _premiumSongTile(song, isLiked)),
+                      ...songs.map(
+                            (song) => _premiumSongTile(song, isLiked),
+                      ),
                   ]),
                 ),
               ),
@@ -870,7 +1077,10 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
       children: [
         IconButton(
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 42, minHeight: 42),
+          constraints: const BoxConstraints(
+            minWidth: 42,
+            minHeight: 42,
+          ),
           onPressed: () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
@@ -878,9 +1088,7 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
             size: 24,
           ),
         ),
-
         const SizedBox(width: 6),
-
         Expanded(
           child: Text(
             widget.title,
@@ -891,7 +1099,6 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
             ),
           ),
         ),
-
         if (!songs.isEmpty && !isLiked)
           TextButton(
             onPressed: clearRecent,
@@ -909,7 +1116,8 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
   }
 
   Widget _heroHeader(bool isLiked) {
-    final countText = songs.length == 1 ? '1 song' : '${songs.length} songs';
+    final countText =
+    songs.length == 1 ? '1 song' : '${songs.length} songs';
 
     return Container(
       width: double.infinity,
@@ -920,10 +1128,18 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isLiked
-              ? const [Color(0xff241522), Color(0xff141116)]
-              : const [Color(0xff211C32), Color(0xff131218)],
+              ? const [
+            Color(0xff241522),
+            Color(0xff141116),
+          ]
+              : const [
+            Color(0xff211C32),
+            Color(0xff131218),
+          ],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: .06)),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: .06),
+        ),
       ),
       child: Row(
         children: [
@@ -937,22 +1153,24 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
               borderRadius: BorderRadius.circular(19),
             ),
             child: Icon(
-              isLiked ? Icons.favorite_rounded : Icons.history_rounded,
+              isLiked
+                  ? Icons.favorite_rounded
+                  : Icons.history_rounded,
               color: isLiked
                   ? const Color(0xffF472B6)
                   : const Color(0xffA78BFA),
               size: 32,
             ),
           ),
-
           const SizedBox(width: 16),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isLiked ? 'Your favorite music' : 'Your listening history',
+                  isLiked
+                      ? 'Your favorite music'
+                      : 'Your listening history',
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 17,
@@ -996,22 +1214,21 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                     child: song.thumbnail.trim().isEmpty
                         ? _fallbackArt()
                         : Image.network(
-                            song.thumbnail,
-                            fit: BoxFit.cover,
-                            cacheWidth: 124,
-                            cacheHeight: 124,
-                            errorBuilder: (_, __, ___) {
-                              return _fallbackArt();
-                            },
-                          ),
+                      song.thumbnail,
+                      fit: BoxFit.cover,
+                      cacheWidth: 124,
+                      cacheHeight: 124,
+                      errorBuilder: (_, __, ___) {
+                        return _fallbackArt();
+                      },
+                    ),
                   ),
                 ),
-
                 const SizedBox(width: 13),
-
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
                     children: [
                       Text(
                         decode(song.title),
@@ -1023,9 +1240,7 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-
                       const SizedBox(height: 4),
-
                       Text(
                         decode(song.artist),
                         maxLines: 1,
@@ -1038,7 +1253,6 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                     ],
                   ),
                 ),
-
                 IconButton(
                   tooltip: 'Play',
                   onPressed: () => openPlayer(song),
@@ -1048,7 +1262,6 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                     size: 34,
                   ),
                 ),
-
                 if (isLiked)
                   IconButton(
                     tooltip: 'Remove from liked',
@@ -1070,11 +1283,18 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
   Widget _emptyState(bool isLiked) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(25, 55, 25, 55),
+      padding: const EdgeInsets.fromLTRB(
+        25,
+        55,
+        25,
+        55,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xff111416),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: .06)),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: .06),
+        ),
       ),
       child: Column(
         children: [
@@ -1088,18 +1308,20 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isLiked ? Icons.favorite_border_rounded : Icons.history_rounded,
+              isLiked
+                  ? Icons.favorite_border_rounded
+                  : Icons.history_rounded,
               color: isLiked
                   ? const Color(0xffF472B6)
                   : const Color(0xffA78BFA),
               size: 34,
             ),
           ),
-
           const SizedBox(height: 18),
-
           Text(
-            isLiked ? 'No liked songs yet' : 'No recently played songs',
+            isLiked
+                ? 'No liked songs yet'
+                : 'No recently played songs',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               color: Colors.white,
@@ -1107,15 +1329,16 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
               fontWeight: FontWeight.w600,
             ),
           ),
-
           const SizedBox(height: 6),
-
           Text(
             isLiked
                 ? 'Tap the heart on any song to save it here.'
                 : 'Songs you listen to will appear here.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(color: Colors.white38, fontSize: 11),
+            style: GoogleFonts.poppins(
+              color: Colors.white38,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -1126,11 +1349,16 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xff8B5CF6), Color(0xff312E81)],
+          colors: [
+            Color(0xff8B5CF6),
+            Color(0xff312E81),
+          ],
         ),
       ),
-      child: const Icon(Icons.music_note_rounded, color: Colors.white70),
+      child: const Icon(
+        Icons.music_note_rounded,
+        color: Colors.white70,
+      ),
     );
   }
 }
-
