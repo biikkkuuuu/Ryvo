@@ -1,4 +1,5 @@
 
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -89,15 +90,28 @@ final playing = state.playing &&
 state.processingState != ProcessingState.completed;
 
 void openPlayer() {
+final currentSong = audio.currentSong.value;
+
+if (currentSong == null) {
+return;
+}
+
+final playbackQueue = List<Song>.from(audio.queue.value);
+
+final playlist = <Song>[
+currentSong,
+...playbackQueue,
+];
+
 Navigator.push(
 context,
 MaterialPageRoute(
 builder: (_) => PlayerScreen(
-title: song.title,
-artist: song.artist,
-image: song.thumbnail,
-songId: song.id,
-playlist: [song],
+title: currentSong.title,
+artist: currentSong.artist,
+image: currentSong.thumbnail,
+songId: currentSong.id,
+playlist: playlist,
 currentIndex: 0,
 ),
 ),
