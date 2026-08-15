@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/models/song.dart';
+import 'package:music_app/widgets/song_playlist_picker.dart';
 
 class PlaylistScreen extends StatelessWidget {
   final String playlistName;
@@ -251,6 +253,10 @@ class PlaylistScreen extends StatelessWidget {
         context,
         index,
       ),
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        SongPlaylistPicker.show(context, song);
+      },
       child: Container(
         margin:
         const EdgeInsets.only(bottom: 10),

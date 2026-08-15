@@ -6,6 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:music_app/features/player/player_screen.dart';
+import 'package:music_app/services/audio_service.dart';
+import 'package:music_app/services/library_service.dart';
+import 'package:music_app/widgets/song_playlist_picker.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/repositories/music_repository.dart';
 
@@ -278,6 +281,12 @@ class _SearchScreenState extends State<SearchScreen> {
       ) async {
     final query = _controller.text.trim();
 
+    if (query.isNotEmpty) {
+      await _saveSearchHistory(query);
+    }
+
+    if (!mounted) return;
+
     setState(() {
       showSuggestions = false;
       loading = true;
@@ -337,6 +346,10 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _openArtist(
       SearchArtistResult artist,
       ) async {
+    await _saveSearchHistory(artist.name);
+
+    if (!mounted) return;
+
     FocusScope.of(context).unfocus();
 
     final songs =
@@ -441,6 +454,118 @@ class _SearchScreenState extends State<SearchScreen> {
           playlist: playlist,
           currentIndex: index,
         ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // SONG OPTIONS
+  // ============================================================
+
+  void showSongOptions(Song song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xff120C1A),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _decode(song.title),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _artistAction(
+                    Icons.queue_music_rounded,
+                    'Add to Queue',
+                        () {
+                      AudioService().addToQueue(song);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _artistAction(
+                    Icons.playlist_play_rounded,
+                    'Play Next',
+                        () {
+                      AudioService().addToQueueNext(song);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _artistAction(
+                    Icons.favorite_rounded,
+                    'Like / Unlike',
+                        () async {
+                      await LibraryService.instance.toggleLike(song);
+                      if (!sheetContext.mounted) return;
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _artistAction(
+                    Icons.library_add_rounded,
+                    'Add to Playlist',
+                        () {
+                      Navigator.pop(sheetContext);
+                      SongPlaylistPicker.show(context, song);
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _artistAction(
+      IconData icon,
+      String title,
+      VoidCallback onTap,
+      ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(icon, color: const Color(0xffA78BFA)),
+        title: Text(
+          title,
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        tileColor: Colors.white.withValues(alpha: 0.04),
       ),
     );
   }
@@ -952,6 +1077,10 @@ class _SearchScreenState extends State<SearchScreen> {
     return GestureDetector(
       onTap: () =>
           _openSongFromSuggestion(song),
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        showSongOptions(song);
+      },
       child: _glassTile(
         child: Row(
           children: [
@@ -1184,6 +1313,10 @@ class _SearchScreenState extends State<SearchScreen> {
               results,
               index,
             );
+          },
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            showSongOptions(song);
           },
           child: _glassTile(
             child: Row(
@@ -1568,6 +1701,95 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ============================================================
+  // SONG OPTIONS
+  // ============================================================
+  // SONG ACTION
+  // ============================================================
+
+  Widget _songAction({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color iconColor = const Color(0xffA78BFA),
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 11,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white38,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white24,
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
   // MESSAGE
   // ============================================================
 
@@ -1744,6 +1966,114 @@ class _ArtistDetailScreenState
           currentIndex: index,
         ),
       ),
+    );
+  }
+
+  // ============================================================
+  // SONG OPTIONS
+  // ============================================================
+
+  void showSongOptions(Song song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xff120C1A),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _decode(song.title),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _artistAction(
+                    Icons.queue_music_rounded,
+                    'Add to Queue',
+                        () {
+                      AudioService().addToQueue(song);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _artistAction(
+                    Icons.playlist_play_rounded,
+                    'Play Next',
+                        () {
+                      AudioService().addToQueueNext(song);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _artistAction(
+                    Icons.favorite_rounded,
+                    'Like / Unlike',
+                        () async {
+                      await LibraryService.instance.toggleLike(song);
+                      if (!sheetContext.mounted) return;
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _artistAction(
+                    Icons.library_add_rounded,
+                    'Add to Playlist',
+                        () {
+                      Navigator.pop(sheetContext);
+                      SongPlaylistPicker.show(context, song);
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _artistAction(
+      IconData icon,
+      String title,
+      VoidCallback onTap,
+      ) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: const Color(0xffA78BFA)),
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
     );
   }
 
@@ -2147,6 +2477,10 @@ class _ArtistDetailScreenState
                                     song,
                                     index,
                                   ),
+                              onLongPress: () {
+                                HapticFeedback.mediumImpact();
+                                showSongOptions(song);
+                              },
                               child:
                               _artistSongTile(
                                 song,

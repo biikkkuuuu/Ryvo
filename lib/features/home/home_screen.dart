@@ -1,4 +1,3 @@
-
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -15,6 +14,7 @@ import 'package:music_app/models/song.dart';
 import 'package:music_app/repositories/music_repository.dart';
 import 'package:music_app/services/audio_service.dart';
 import 'package:music_app/services/library_service.dart';
+import 'package:music_app/widgets/song_playlist_picker.dart';
 
 
 // ============================================================
@@ -1847,11 +1847,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: 'Add to Playlist',
                       subtitle:
                       'Save this song to a playlist',
-                      onTap: () {
+                      onTap: () async {
                         Navigator.pop(sheetContext);
 
-                        _showQueueMessage(
-                          'Playlist manager will be connected next',
+                        await SongPlaylistPicker.show(
+                          context,
+                          song,
                         );
                       },
                     ),
@@ -2080,6 +2081,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .replaceAll('&gt;', '>');
   }
 }
+
 
 
 

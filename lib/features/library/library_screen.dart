@@ -1,10 +1,12 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/features/playlist/playlist_screen.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/services/audio_service.dart';
 import 'package:music_app/services/library_service.dart';
+import 'package:music_app/widgets/song_playlist_picker.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -677,6 +679,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
         borderRadius: BorderRadius.circular(17),
         child: InkWell(
           onTap: () => openPlayer(song, playlist),
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            SongPlaylistPicker.show(context, song);
+          },
           borderRadius: BorderRadius.circular(17),
           child: Padding(
             padding: const EdgeInsets.all(9),
