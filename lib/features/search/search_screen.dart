@@ -1,9 +1,11 @@
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music_app/app/theme_controller.dart';
 
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/services/audio_service.dart';
@@ -25,6 +27,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
   final MusicRepository _repository =
   MusicRepository();
+
+  Color get _primary => Theme.of(context).colorScheme.primary;
+  Color get _primaryLight => Theme.of(context).colorScheme.secondary;
+  Color get _primaryDark => Theme.of(context).colorScheme.primaryContainer;
 
   final FocusNode _focusNode =
   FocusNode();
@@ -165,7 +171,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     await Future.delayed(
-      const Duration(milliseconds: 350),
+      Duration(milliseconds: 350),
     );
 
     if (!mounted) return;
@@ -470,11 +476,11 @@ class _SearchScreenState extends State<SearchScreen> {
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xff120C1A),
+                color: Color(0xff120C1A),
                 borderRadius: BorderRadius.circular(26),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.10),
@@ -493,7 +499,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   _artistAction(
                     Icons.queue_music_rounded,
                     'Add to Queue',
@@ -527,10 +533,10 @@ class _SearchScreenState extends State<SearchScreen> {
                       SongPlaylistPicker.show(context, song);
                     },
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   TextButton(
                     onPressed: () => Navigator.pop(sheetContext),
-                    child: const Text(
+                    child: Text(
                       'Cancel',
                       style: TextStyle(color: Colors.white54),
                     ),
@@ -550,10 +556,10 @@ class _SearchScreenState extends State<SearchScreen> {
       VoidCallback onTap,
       ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: 8),
       child: ListTile(
         onTap: onTap,
-        leading: Icon(icon, color: const Color(0xffA78BFA)),
+        leading: Icon(icon, color: _primaryLight),
         title: Text(
           title,
           style: GoogleFonts.poppins(
@@ -577,7 +583,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness:
         Brightness.light,
@@ -586,7 +592,7 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
       child: Scaffold(
         backgroundColor:
-        const Color(0xff0A0614),
+        Color(0xff0A0614),
         extendBodyBehindAppBar: true,
         body: Stack(
           children: [
@@ -597,7 +603,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Positioned.fill(
               child: Container(
                 decoration:
-                const BoxDecoration(
+                BoxDecoration(
                   gradient:
                   LinearGradient(
                     begin:
@@ -605,10 +611,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     end:
                     Alignment.bottomRight,
                     colors: [
-                      Color(0xff2A1152),
-                      Color(0xff3B1670),
-                      Color(0xff1B0E33),
-                      Color(0xff0A0614),
+                      _primaryDark.withValues(alpha: 0.72),
+                      _primary.withValues(alpha: 0.46),
+                      _primaryDark.withValues(alpha: 0.24),
+                      Colors.black,
                     ],
                     stops: [
                       0.0,
@@ -626,7 +632,7 @@ class _SearchScreenState extends State<SearchScreen> {
               left: -100,
               child: _ambientLight(
                 300,
-                const Color(0xff7C3AED),
+                _primary,
               ),
             ),
 
@@ -635,7 +641,7 @@ class _SearchScreenState extends State<SearchScreen> {
               right: -130,
               child: _ambientLight(
                 280,
-                const Color(0xff6D28D9),
+                _primaryDark,
               ),
             ),
 
@@ -646,7 +652,7 @@ class _SearchScreenState extends State<SearchScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
 
                   // ==================================================
                   // HEADER
@@ -654,7 +660,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
                   Padding(
                     padding:
-                    const EdgeInsets.symmetric(
+                    EdgeInsets.symmetric(
                       horizontal: 20,
                     ),
                     child: Row(
@@ -669,7 +675,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             height: 44,
                             radius: 15,
                             child:
-                            const Icon(
+                            Icon(
                               Icons
                                   .arrow_back_ios_new_rounded,
                               color:
@@ -679,7 +685,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         ),
 
-                        const SizedBox(
+                        SizedBox(
                           width: 14,
                         ),
 
@@ -698,7 +704,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
 
                   // ==================================================
                   // SEARCH FIELD
@@ -706,7 +712,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
                   Padding(
                     padding:
-                    const EdgeInsets.symmetric(
+                    EdgeInsets.symmetric(
                       horizontal: 20,
                     ),
                     child: _glassBox(
@@ -714,19 +720,19 @@ class _SearchScreenState extends State<SearchScreen> {
                       height: 58,
                       child: Row(
                         children: [
-                          const SizedBox(
+                          SizedBox(
                             width: 15,
                           ),
 
-                          const Icon(
+                          Icon(
                             Icons
                                 .search_rounded,
                             color:
-                            Color(0xffB794F4),
+                            _primaryLight,
                             size: 24,
                           ),
 
-                          const SizedBox(
+                          SizedBox(
                             width: 11,
                           ),
 
@@ -751,7 +757,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 fontSize: 13,
                               ),
                               cursorColor:
-                              const Color(
+                              Color(
                                 0xffA78BFA,
                               ),
                               decoration:
@@ -781,14 +787,14 @@ class _SearchScreenState extends State<SearchScreen> {
                               width: 44,
                               height: 44,
                               margin:
-                              const EdgeInsets
+                              EdgeInsets
                                   .only(
                                 right: 6,
                               ),
                               decoration:
                               BoxDecoration(
                                 color:
-                                const Color(
+                                Color(
                                   0xff8B5CF6,
                                 ).withValues(
                                   alpha: 0.78,
@@ -800,7 +806,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 ),
                               ),
                               child:
-                              const Icon(
+                              Icon(
                                 Icons
                                     .search_rounded,
                                 color:
@@ -814,7 +820,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
 
                   // ==================================================
                   // MAIN AREA
@@ -842,8 +848,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _searchHistoryView() {
     return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 30),
+      physics: BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 30),
       children: [
         Row(
           children: [
@@ -855,13 +861,13 @@ class _SearchScreenState extends State<SearchScreen> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const Spacer(),
+            Spacer(),
             GestureDetector(
               onTap: _clearSearchHistory,
               child: Text(
                 'Clear',
                 style: GoogleFonts.poppins(
-                  color: const Color(0xffA78BFA),
+                  color: _primaryLight,
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
@@ -870,14 +876,14 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
         ),
 
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
 
         ..._searchHistory.map(
               (query) => GestureDetector(
             onTap: () => _searchFromHistory(query),
             child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(
+              margin: EdgeInsets.only(bottom: 8),
+              padding: EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 13,
               ),
@@ -890,12 +896,12 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.history_rounded,
-                    color: Color(0xffA78BFA),
+                    color: _primaryLight,
                     size: 20,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       query,
@@ -907,7 +913,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.north_west_rounded,
                     color: Colors.white30,
                     size: 17,
@@ -939,9 +945,9 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _suggestionsView() {
     return ListView(
       physics:
-      const BouncingScrollPhysics(),
+      BouncingScrollPhysics(),
       padding:
-      const EdgeInsets.fromLTRB(
+      EdgeInsets.fromLTRB(
         20,
         4,
         20,
@@ -949,7 +955,7 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
       children: [
         if (suggestionLoading)
-          const Padding(
+          Padding(
             padding:
             EdgeInsets.all(30),
             child: Center(
@@ -957,7 +963,7 @@ class _SearchScreenState extends State<SearchScreen> {
               CircularProgressIndicator(
                 strokeWidth: 2,
                 color:
-                Color(0xffA78BFA),
+                _primaryLight,
               ),
             ),
           ),
@@ -1015,7 +1021,7 @@ class _SearchScreenState extends State<SearchScreen> {
               radius: 24,
             ),
 
-            const SizedBox(width: 13),
+            SizedBox(width: 13),
 
             Expanded(
               child: Column(
@@ -1036,7 +1042,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(
+                  SizedBox(
                     height: 2,
                   ),
                   Text(
@@ -1054,11 +1060,11 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
 
-            const Icon(
+            Icon(
               Icons
                   .person_outline_rounded,
               color:
-              Color(0xffA78BFA),
+              _primaryLight,
               size: 22,
             ),
           ],
@@ -1090,7 +1096,7 @@ class _SearchScreenState extends State<SearchScreen> {
               radius: 13,
             ),
 
-            const SizedBox(width: 13),
+            SizedBox(width: 13),
 
             Expanded(
               child: Column(
@@ -1111,7 +1117,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(
+                  SizedBox(
                     height: 2,
                   ),
                   Text(
@@ -1130,10 +1136,10 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
 
-            const Icon(
+            Icon(
               Icons.play_arrow_rounded,
               color:
-              Color(0xffA78BFA),
+              _primaryLight,
               size: 27,
             ),
           ],
@@ -1161,7 +1167,7 @@ class _SearchScreenState extends State<SearchScreen> {
               radius: 13,
             ),
 
-            const SizedBox(width: 13),
+            SizedBox(width: 13),
 
             Expanded(
               child: Column(
@@ -1182,7 +1188,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(
+                  SizedBox(
                     height: 2,
                   ),
                   Text(
@@ -1204,11 +1210,11 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
 
-            const Icon(
+            Icon(
               Icons
                   .playlist_play_rounded,
               color:
-              Color(0xffA78BFA),
+              _primaryLight,
               size: 27,
             ),
           ],
@@ -1226,7 +1232,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return Center(
         child: Padding(
           padding:
-          const EdgeInsets.all(30),
+          EdgeInsets.all(30),
           child: Column(
             mainAxisAlignment:
             MainAxisAlignment.center,
@@ -1237,7 +1243,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 decoration:
                 BoxDecoration(
                   color:
-                  const Color(
+                  Color(
                     0xff8B5CF6,
                   ).withValues(
                     alpha: 0.10,
@@ -1246,16 +1252,16 @@ class _SearchScreenState extends State<SearchScreen> {
                   BoxShape.circle,
                 ),
                 child:
-                const Icon(
+                Icon(
                   Icons
                       .search_rounded,
                   color:
-                  Color(0xffA78BFA),
+                  _primaryLight,
                   size: 32,
                 ),
               ),
 
-              const SizedBox(
+              SizedBox(
                 height: 15,
               ),
 
@@ -1271,7 +1277,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
 
-              const SizedBox(
+              SizedBox(
                 height: 4,
               ),
 
@@ -1292,9 +1298,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
     return ListView.builder(
       physics:
-      const BouncingScrollPhysics(),
+      BouncingScrollPhysics(),
       padding:
-      const EdgeInsets.fromLTRB(
+      EdgeInsets.fromLTRB(
         20,
         4,
         20,
@@ -1327,7 +1333,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   radius: 14,
                 ),
 
-                const SizedBox(
+                SizedBox(
                   width: 13,
                 ),
 
@@ -1355,7 +1361,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(
+                      SizedBox(
                         height: 4,
                       ),
                       Text(
@@ -1387,7 +1393,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   decoration:
                   BoxDecoration(
                     color:
-                    const Color(
+                    Color(
                       0xff8B5CF6,
                     ).withValues(
                       alpha: 0.78,
@@ -1396,7 +1402,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     BoxShape.circle,
                   ),
                   child:
-                  const Icon(
+                  Icon(
                     Icons
                         .play_arrow_rounded,
                     color:
@@ -1428,7 +1434,7 @@ class _SearchScreenState extends State<SearchScreen> {
             decoration:
             BoxDecoration(
               color:
-              const Color(
+              Color(
                 0xff8B5CF6,
               ).withValues(
                 alpha: 0.10,
@@ -1437,7 +1443,7 @@ class _SearchScreenState extends State<SearchScreen> {
               BoxShape.circle,
               border: Border.all(
                 color:
-                const Color(
+                Color(
                   0xffA78BFA,
                 ).withValues(
                   alpha: 0.18,
@@ -1445,19 +1451,19 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
             child:
-            const Padding(
+            Padding(
               padding:
               EdgeInsets.all(14),
               child:
               CircularProgressIndicator(
                 strokeWidth: 2,
                 color:
-                Color(0xffA78BFA),
+                _primaryLight,
               ),
             ),
           ),
 
-          const SizedBox(
+          SizedBox(
             height: 14,
           ),
 
@@ -1484,7 +1490,7 @@ class _SearchScreenState extends State<SearchScreen> {
       ) {
     return Padding(
       padding:
-      const EdgeInsets.fromLTRB(
+      EdgeInsets.fromLTRB(
         2,
         14,
         2,
@@ -1512,11 +1518,11 @@ class _SearchScreenState extends State<SearchScreen> {
   }) {
     return Container(
       margin:
-      const EdgeInsets.only(
+      EdgeInsets.only(
         bottom: 9,
       ),
       padding:
-      const EdgeInsets.all(10),
+      EdgeInsets.all(10),
       decoration:
       BoxDecoration(
         color: Colors.white
@@ -1637,15 +1643,15 @@ class _SearchScreenState extends State<SearchScreen> {
           radius,
         ),
         gradient:
-        const LinearGradient(
+        LinearGradient(
           colors: [
-            Color(0xff8B5CF6),
-            Color(0xff312E81),
+            _primary,
+            _primaryDark,
           ],
         ),
       ),
       child:
-      const Icon(
+      Icon(
         Icons.music_note_rounded,
         color:
         Colors.white70,
@@ -1688,7 +1694,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   alpha: 0,
                 ),
               ],
-              stops: const [
+              stops: [
                 0.0,
                 0.52,
                 1.0,
@@ -1711,10 +1717,12 @@ class _SearchScreenState extends State<SearchScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    Color iconColor = const Color(0xffA78BFA),
+    Color? iconColor,
   }) {
+    final resolvedIconColor = iconColor ?? _primaryLight;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
+      padding: EdgeInsets.only(bottom: 9),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1724,7 +1732,7 @@ class _SearchScreenState extends State<SearchScreen> {
           },
           borderRadius: BorderRadius.circular(18),
           child: Ink(
-            padding: const EdgeInsets.symmetric(
+            padding: EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 11,
             ),
@@ -1741,16 +1749,16 @@ class _SearchScreenState extends State<SearchScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.12),
+                    color: resolvedIconColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
                     icon,
-                    color: iconColor,
+                    color: resolvedIconColor,
                     size: 22,
                   ),
                 ),
-                const SizedBox(width: 13),
+                SizedBox(width: 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1763,7 +1771,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         subtitle,
                         maxLines: 1,
@@ -1776,7 +1784,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   color: Colors.white24,
                   size: 22,
@@ -1810,7 +1818,7 @@ class _SearchScreenState extends State<SearchScreen> {
           behavior:
           SnackBarBehavior.floating,
           margin:
-          const EdgeInsets.fromLTRB(
+          EdgeInsets.fromLTRB(
             16,
             0,
             16,
@@ -1887,7 +1895,7 @@ class _ArtistDetailScreen
   final SearchArtistResult artist;
   final MusicRepository repository;
 
-  const _ArtistDetailScreen({
+  _ArtistDetailScreen({
     required this.artist,
     required this.repository,
   });
@@ -1899,6 +1907,10 @@ class _ArtistDetailScreen
 
 class _ArtistDetailScreenState
     extends State<_ArtistDetailScreen> {
+  Color get _primary => Theme.of(context).colorScheme.primary;
+  Color get _primaryLight => Theme.of(context).colorScheme.secondary;
+  Color get _primaryDark => Theme.of(context).colorScheme.primaryContainer;
+
   List<Song> songs = [];
 
   bool loading = true;
@@ -1980,11 +1992,11 @@ class _ArtistDetailScreenState
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xff120C1A),
+                color: Color(0xff120C1A),
                 borderRadius: BorderRadius.circular(26),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.10),
@@ -2003,7 +2015,7 @@ class _ArtistDetailScreenState
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   _artistAction(
                     Icons.queue_music_rounded,
                     'Add to Queue',
@@ -2037,10 +2049,10 @@ class _ArtistDetailScreenState
                       SongPlaylistPicker.show(context, song);
                     },
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   TextButton(
                     onPressed: () => Navigator.pop(sheetContext),
-                    child: const Text(
+                    child: Text(
                       'Cancel',
                       style: TextStyle(color: Colors.white54),
                     ),
@@ -2061,7 +2073,7 @@ class _ArtistDetailScreenState
       ) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: const Color(0xffA78BFA)),
+      leading: Icon(icon, color: _primaryLight),
       title: Text(
         title,
         style: GoogleFonts.poppins(
@@ -2084,7 +2096,7 @@ class _ArtistDetailScreenState
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor:
         Colors.transparent,
         statusBarIconBrightness:
@@ -2094,7 +2106,7 @@ class _ArtistDetailScreenState
       ),
       child: Scaffold(
         backgroundColor:
-        const Color(0xff0A0614),
+        Color(0xff0A0614),
         body: Stack(
           children: [
             // ==================================================
@@ -2104,7 +2116,7 @@ class _ArtistDetailScreenState
             Positioned.fill(
               child: Container(
                 decoration:
-                const BoxDecoration(
+                BoxDecoration(
                   gradient:
                   LinearGradient(
                     begin:
@@ -2112,9 +2124,9 @@ class _ArtistDetailScreenState
                     end:
                     Alignment.bottomCenter,
                     colors: [
-                      Color(0xff32115E),
-                      Color(0xff1C0D35),
-                      Color(0xff0A0614),
+                      _primaryDark.withValues(alpha: 0.72),
+                      _primary.withValues(alpha: 0.34),
+                      Colors.black,
                     ],
                     stops: [
                       0.0,
@@ -2131,7 +2143,7 @@ class _ArtistDetailScreenState
               left: -80,
               child: _artistAmbientLight(
                 360,
-                const Color(0xff8B5CF6),
+                _primary,
               ),
             ),
 
@@ -2140,7 +2152,7 @@ class _ArtistDetailScreenState
               right: -180,
               child: _artistAmbientLight(
                 360,
-                const Color(0xff6D28D9),
+                _primaryDark,
               ),
             ),
 
@@ -2151,7 +2163,7 @@ class _ArtistDetailScreenState
             SafeArea(
               child: CustomScrollView(
                 physics:
-                const BouncingScrollPhysics(),
+                BouncingScrollPhysics(),
                 slivers: [
                   // ==================================================
                   // APP BAR
@@ -2160,7 +2172,7 @@ class _ArtistDetailScreenState
                   SliverToBoxAdapter(
                     child: Padding(
                       padding:
-                      const EdgeInsets.fromLTRB(
+                      EdgeInsets.fromLTRB(
                         20,
                         10,
                         20,
@@ -2179,7 +2191,7 @@ class _ArtistDetailScreenState
                               height: 44,
                               radius: 15,
                               child:
-                              const Icon(
+                              Icon(
                                 Icons
                                     .arrow_back_ios_new_rounded,
                                 color: Colors
@@ -2189,7 +2201,7 @@ class _ArtistDetailScreenState
                             ),
                           ),
 
-                          const Spacer(),
+                          Spacer(),
 
                           Text(
                             'Artist',
@@ -2205,9 +2217,9 @@ class _ArtistDetailScreenState
                             ),
                           ),
 
-                          const Spacer(),
+                          Spacer(),
 
-                          const SizedBox(
+                          SizedBox(
                             width: 44,
                           ),
                         ],
@@ -2222,7 +2234,7 @@ class _ArtistDetailScreenState
                   SliverToBoxAdapter(
                     child: Padding(
                       padding:
-                      const EdgeInsets
+                      EdgeInsets
                           .fromLTRB(
                         20,
                         30,
@@ -2236,7 +2248,7 @@ class _ArtistDetailScreenState
                             widget.artist.image,
                           ),
 
-                          const SizedBox(
+                          SizedBox(
                             height: 20,
                           ),
 
@@ -2263,7 +2275,7 @@ class _ArtistDetailScreenState
                             ),
                           ),
 
-                          const SizedBox(
+                          SizedBox(
                             height: 5,
                           ),
 
@@ -2278,14 +2290,14 @@ class _ArtistDetailScreenState
                             ),
                           ),
 
-                          const SizedBox(
+                          SizedBox(
                             height: 18,
                           ),
 
                           // Song count
                           Container(
                             padding:
-                            const EdgeInsets
+                            EdgeInsets
                                 .symmetric(
                               horizontal: 15,
                               vertical: 8,
@@ -2341,7 +2353,7 @@ class _ArtistDetailScreenState
                     SliverToBoxAdapter(
                       child: Padding(
                         padding:
-                        const EdgeInsets
+                        EdgeInsets
                             .fromLTRB(
                           20,
                           10,
@@ -2363,7 +2375,7 @@ class _ArtistDetailScreenState
                                     .w700,
                               ),
                             ),
-                            const Spacer(),
+                            Spacer(),
                             Text(
                               '${songs.length}',
                               style:
@@ -2384,7 +2396,7 @@ class _ArtistDetailScreenState
                   // ==================================================
 
                   if (loading)
-                    const SliverFillRemaining(
+                    SliverFillRemaining(
                       hasScrollBody: false,
                       child: Center(
                         child:
@@ -2409,21 +2421,21 @@ class _ArtistDetailScreenState
                       child: Center(
                         child: Padding(
                           padding:
-                          const EdgeInsets
+                          EdgeInsets
                               .all(30),
                           child: Column(
                             mainAxisAlignment:
                             MainAxisAlignment
                                 .center,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons
                                     .music_off_rounded,
                                 color: Colors
                                     .white38,
                                 size: 42,
                               ),
-                              const SizedBox(
+                              SizedBox(
                                 height: 12,
                               ),
                               Text(
@@ -2456,7 +2468,7 @@ class _ArtistDetailScreenState
                       songs.isNotEmpty)
                     SliverPadding(
                       padding:
-                      const EdgeInsets
+                      EdgeInsets
                           .fromLTRB(
                         20,
                         0,
@@ -2518,7 +2530,7 @@ class _ArtistDetailScreenState
         BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(
+            color: Color(
               0xff8B5CF6,
             ).withValues(
               alpha: 0.25,
@@ -2551,7 +2563,7 @@ class _ArtistDetailScreenState
       width: 190,
       height: 190,
       decoration:
-      const BoxDecoration(
+      BoxDecoration(
         shape:
         BoxShape.circle,
         gradient:
@@ -2561,13 +2573,13 @@ class _ArtistDetailScreenState
           end:
           Alignment.bottomRight,
           colors: [
-            Color(0xff8B5CF6),
-            Color(0xff312E81),
+            _primary,
+            _primaryDark,
           ],
         ),
       ),
       child:
-      const Icon(
+      Icon(
         Icons.person_rounded,
         color:
         Colors.white70,
@@ -2586,11 +2598,11 @@ class _ArtistDetailScreenState
       ) {
     return Container(
       margin:
-      const EdgeInsets.only(
+      EdgeInsets.only(
         bottom: 9,
       ),
       padding:
-      const EdgeInsets.all(9),
+      EdgeInsets.all(9),
       decoration:
       BoxDecoration(
         color: Colors.white
@@ -2628,7 +2640,7 @@ class _ArtistDetailScreenState
             ),
           ),
 
-          const SizedBox(
+          SizedBox(
             width: 4,
           ),
 
@@ -2639,7 +2651,7 @@ class _ArtistDetailScreenState
             13,
           ),
 
-          const SizedBox(
+          SizedBox(
             width: 13,
           ),
 
@@ -2666,7 +2678,7 @@ class _ArtistDetailScreenState
                   ),
                 ),
 
-                const SizedBox(
+                SizedBox(
                   height: 4,
                 ),
 
@@ -2688,7 +2700,7 @@ class _ArtistDetailScreenState
             ),
           ),
 
-          const SizedBox(
+          SizedBox(
             width: 8,
           ),
 
@@ -2698,7 +2710,7 @@ class _ArtistDetailScreenState
             decoration:
             BoxDecoration(
               color:
-              const Color(
+              Color(
                 0xff8B5CF6,
               ).withValues(
                 alpha: 0.72,
@@ -2707,7 +2719,7 @@ class _ArtistDetailScreenState
               BoxShape.circle,
             ),
             child:
-            const Icon(
+            Icon(
               Icons
                   .play_arrow_rounded,
               color:
@@ -2768,15 +2780,15 @@ class _ArtistDetailScreenState
           radius,
         ),
         gradient:
-        const LinearGradient(
+        LinearGradient(
           colors: [
-            Color(0xff8B5CF6),
-            Color(0xff312E81),
+            _primary,
+            _primaryDark,
           ],
         ),
       ),
       child:
-      const Icon(
+      Icon(
         Icons.music_note_rounded,
         color:
         Colors.white70,
@@ -2867,7 +2879,7 @@ class _ArtistDetailScreenState
                   alpha: 0,
                 ),
               ],
-              stops: const [
+              stops: [
                 0.0,
                 0.52,
                 1.0,
@@ -2911,3 +2923,4 @@ class _ArtistDetailScreenState
     );
   }
 }
+
