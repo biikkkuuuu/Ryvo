@@ -47,6 +47,13 @@ class RyvoThemeController extends ChangeNotifier {
 
   static const List<RyvoThemeData> themes = [
     RyvoThemeData(
+      name: 'Spotify Green',
+      subtitle: 'Classic Emerald',
+      primary: Color(0xff1ED760),
+      primaryLight: Color(0xff1DB954),
+      primaryDark: Color(0xff0e682e),
+    ),
+    RyvoThemeData(
       name: 'Aurora',
       subtitle: 'RYVO Purple',
       primary: Color(0xff8B5CF6),

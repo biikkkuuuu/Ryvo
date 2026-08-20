@@ -461,206 +461,104 @@ class MusicRepository {
     return _convertToSongs(candidates);
   }
 
-  Future<List<Song>> getAlbumSongs(String albumId) async {
-    try {
-      final albumData = await _service.getAlbum(albumId.trim());
-      if (albumData is Map) {
-        final rawSongs = albumData['songs'] ?? albumData['list'];
-        if (rawSongs is List) {
-          return _convertToSongs(rawSongs.whereType<Map>().toList());
-        }
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
-
   // ============================================================
   // HOME
   // ============================================================
 
   Future<Map<String, List<Song>>> getHomeSections() async {
-    try {
-      final bundle = await getHomeBundle();
-      final raw = bundle['sections'];
-      if (raw is Map) {
-        return raw.map<String, List<Song>>((key, value) {
-          if (value is List<Song>) return MapEntry(key.toString(), value);
-          return MapEntry(key.toString(), <Song>[]);
-        });
-      }
-      return {};
-    } catch (e) {
-      debugPrint('RYVO HOME SECTIONS ERROR: $e');
-      return {};
-    }
-  }
+    final sectionQueries = <String, List<String>>{
+      'Trending': [
+        'trending songs',
+        'viral songs',
+        'latest hit songs',
+        'new trending songs',
+        'top songs',
+      ],
+      'Hindi Hits': [
+        'latest hindi songs',
+        'new bollywood songs',
+        'hindi hit songs',
+        'latest hindi hits',
+        'new hindi songs',
+      ],
+      'Romantic': [
+        'latest romantic songs',
+        'new romantic songs',
+        'romantic hindi hits',
+        'romantic songs',
+        'love songs',
+      ],
+      'Punjabi': [
+        'latest punjabi songs',
+        'new punjabi songs',
+        'punjabi hits',
+        'punjabi trending songs',
+        'new punjabi hits',
+      ],
+      'English': [
+        'latest english songs',
+        'new english hits',
+        'english trending songs',
+        'popular english songs',
+        'new english songs',
+      ],
+      'Chill': [
+        'latest chill songs',
+        'new chill music',
+        'chill hits',
+        'relaxing songs',
+        'chill playlist',
+      ],
+    };
 
-  // ============================================================
-  // HOME - LIVE SINGLE BUNDLE
-  // ============================================================
+    final entries = sectionQueries.entries.toList();
 
-  Future<Map<String, dynamic>> getHomeBundle() async {
-    try {
-      final homeData = await _service.getHome();
-      if (homeData is! Map) throw Exception('Invalid Home response');
+    final results = await Future.wait(
+      entries.map(
+            (entry) async {
+          final candidates =
+          await _fetchCandidates(entry.value);
 
-      final newlyReleased = await _resolveHomeModuleSongs(
-          homeData['newReleases'], sectionName: 'Newly Released');
-      final trending = await _resolveHomeModuleSongs(
-          homeData['newTrending'], sectionName: 'Trending');
-      final charts = await _resolveHomeModuleSongs(
-          homeData['charts'], sectionName: 'Charts');
+          final selected =
+          await _selectFreshSongs(
+            sectionName: entry.key,
+            candidates: candidates,
+          );
 
-      List<SearchPlaylistResult> parsePlaylists(dynamic value) {
-        if (value is! List) return [];
-        return value.map(_convertPlaylist).whereType<SearchPlaylistResult>().toList();
-      }
-
-      List<SearchAlbumResult> parseAlbums(dynamic value) {
-        if (value is! List) return [];
-        return value.map(_convertAlbum).whereType<SearchAlbumResult>().toList();
-      }
-
-      List<Map<String, String>> parseSimple(dynamic value) {
-        if (value is! List) return [];
-        return value.whereType<Map>().map((item) {
-          final moreInfo = item['more_info'];
-          final info = moreInfo is Map ? moreInfo : const {};
-          return <String, String>{
-            'id': item['id']?.toString() ?? '',
-            'title': item['title']?.toString() ?? item['name']?.toString() ?? '',
-            'subtitle': item['subtitle']?.toString() ?? '',
-            'type': item['type']?.toString() ?? '',
-            'image': item['image']?.toString() ?? '',
-            'permaUrl': item['perma_url']?.toString() ?? '',
-            'squareImage': info['square_image']?.toString() ?? '',
-            'season': info['season_number']?.toString() ?? '',
-            'badge': info['badge']?.toString() ?? '',
-          };
-        }).where((item) => item['title']!.trim().isNotEmpty).toList();
-      }
-
-      debugPrint('RYVO HOME BUNDLE: Newly Released = ${newlyReleased.length}');
-      debugPrint('RYVO HOME BUNDLE: Trending = ${trending.length}');
-      debugPrint('RYVO HOME BUNDLE: Charts = ${charts.length}');
-
-      return <String, dynamic>{
-        'sections': <String, List<Song>>{
-          'Newly Released': newlyReleased,
-          'Trending': trending,
-          'Charts': charts,
+          return MapEntry(
+            entry.key,
+            selected,
+          );
         },
-        'playlists': parsePlaylists(homeData['topPlaylists']),
-        'discover': parseSimple(homeData['browseDiscover']),
-        'albums': parseAlbums(homeData['newAlbums']),
-        'shows': parseSimple(homeData['topShows']),
-      };
-    } catch (e) {
-      debugPrint('RYVO HOME BUNDLE ERROR: $e');
-      rethrow;
-    }
-  }
+      ),
+    );
 
-  // ============================================================
-  // HOME - RESOLVE ALBUM/CARD OBJECTS TO REAL SONGS
-  // ============================================================
+    final sections = <String, List<Song>>{};
+    final globallyUsedIds = <String>{};
 
-  Future<List<Song>> _resolveHomeModuleSongs(
-      dynamic value, {
-        required String sectionName,
-      }) async {
-    if (value is! List) return [];
+    for (final result in results) {
+      final filtered = <Song>[];
 
-    final output = <Song>[];
-    final ids = <String>{};
-    final processedAlbums = <String>{};
-
-    void addSongs(List<Song> songs) {
-      for (final song in songs) {
-        final id = song.id.trim();
-        if (id.isEmpty || !ids.add(id)) continue;
-        output.add(song);
-        if (output.length >= _songsPerSection) break;
-      }
-    }
-
-    for (final item in value.whereType<Map>()) {
-      final type = item['type']?.toString().trim().toLowerCase() ?? '';
-
-      // ----------------------------------------------------------
-      // REAL SONG OBJECT
-      // ----------------------------------------------------------
-      if (type == 'song') {
-        addSongs(_convertToSongs([item]));
-
-        if (output.length >= _songsPerSection) {
-          break;
-        }
-
-        continue;
-      }
-
-      // ----------------------------------------------------------
-      // HOME CHART/TRENDING ITEMS ARE OFTEN ALBUMS.
-      // Fetch the actual album by its ID so we get its real song
-      // objects and each song's own artwork.
-      // ----------------------------------------------------------
-      final albumId = item['id']?.toString().trim() ?? '';
-
-      if (albumId.isNotEmpty &&
-          (type == 'album' || type == 'compilation' || type.isEmpty)) {
-        if (!processedAlbums.add(albumId)) {
+      for (final song in result.value) {
+        if (song.id.isEmpty) {
           continue;
         }
 
-        try {
-          final albumData = await _service.getAlbum(albumId);
+        if (!globallyUsedIds.add(song.id)) {
+          continue;
+        }
 
-          dynamic rawSongs;
+        filtered.add(song);
 
-          if (albumData is Map) {
-            rawSongs = albumData['songs'];
-
-            // Be defensive if the backend ever returns the older
-            // Saavn-style album payload with `list` instead.
-            if (rawSongs is! List) {
-              rawSongs = albumData['list'];
-            }
-          }
-
-          if (rawSongs is List) {
-            addSongs(
-              _convertToSongs(
-                rawSongs.whereType<Map>().toList(),
-              ),
-            );
-          }
-        } catch (e) {
-          debugPrint(
-            'RYVO HOME $sectionName album fetch failed '
-                '[$albumId]: $e',
-          );
+        if (filtered.length >= _songsPerSection) {
+          break;
         }
       }
 
-      if (output.length >= _songsPerSection) {
-        break;
-      }
+      sections[result.key] = filtered;
     }
 
-    // IMPORTANT:
-    // Do NOT search an album title as a fallback here. That was the
-    // cause of repeated artwork: a title search can return several
-    // songs from the same compilation/album and all of them can share
-    // the same artwork. If the Home API gives an album but the album
-    // endpoint fails, leave that item unresolved instead of inventing
-    // unrelated songs.
-
-    return _uniqueSongs(output)
-        .take(_songsPerSection)
-        .toList();
+    return sections;
   }
 
   // ============================================================
@@ -1231,24 +1129,6 @@ class MusicRepository {
   // ============================================================
   // HELPERS
   // ============================================================
-
-  List<Song> _uniqueSongs(
-      List<Song> songs,
-      ) {
-    final map = <String, Song>{};
-
-    for (final song in songs) {
-      final id = song.id.trim();
-
-      if (id.isEmpty) {
-        continue;
-      }
-
-      map[id] = song;
-    }
-
-    return map.values.toList();
-  }
 
   bool _containsSong(
       List<Song> songs,

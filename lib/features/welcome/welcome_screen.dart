@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:music_app/features/home/home_screen.dart';
+import 'package:music_app/theme/app_theme.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -11,11 +12,11 @@ class WelcomeScreen extends StatelessWidget {
     try {
       await GoogleSignIn.instance.initialize(
         serverClientId:
-        '479625784257-m4515prj3c949i5r2mb6locuoljvao9e.apps.googleusercontent.com',
+            '479625784257-m4515prj3c949i5r2mb6locuoljvao9e.apps.googleusercontent.com',
       );
 
       final GoogleSignInAccount googleUser =
-      await GoogleSignIn.instance.authenticate();
+          await GoogleSignIn.instance.authenticate();
 
       final GoogleSignInAuthentication googleAuth =
           googleUser.authentication;
@@ -66,9 +67,8 @@ class WelcomeScreen extends StatelessWidget {
         transitionDuration: const Duration(milliseconds: 500),
         reverseTransitionDuration: const Duration(milliseconds: 350),
         pageBuilder: (context, animation, secondaryAnimation) =>
-        const HomeScreen(),
-        transitionsBuilder:
-            (context, animation, secondaryAnimation, child) {
+            const HomeScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curve = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutCubic,
@@ -92,129 +92,161 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const Spacer(),
-
-              const Hero(
-                tag: 'ryvo_logo',
-                child: Image(
-                  image: AssetImage('assets/icon/ryvo-icon.png'),
-                  width: 95,
-                  height: 95,
-                  fit: BoxFit.contain,
+      backgroundColor: SpotifyColors.background,
+      body: Stack(
+        children: [
+          // Background ambient gradient
+          Positioned(
+            top: -100,
+            left: -50,
+            right: -50,
+            height: 380,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    SpotifyColors.green.withValues(alpha: 0.15),
+                    Colors.transparent,
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              Text(
-                'RYVO',
-                style: GoogleFonts.poppins(
-                  fontSize: 44,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 7,
-                  color: Colors.white,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Text(
-                'Music Reimagined',
-                style: GoogleFonts.poppins(
-                  color: Colors.white60,
-                  fontSize: 16,
-                ),
-              ),
-
-              const Spacer(),
-
-              SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: ElevatedButton.icon(
-                  onPressed: () => _signInWithGoogle(context),
-                  icon: const Icon(
-                    Icons.g_mobiledata,
-                    size: 34,
-                    color: Colors.black,
-                  ),
-                  label: Text(
-                    'Continue with Google',
-                    style: GoogleFonts.poppins(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    elevation: 0,
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: OutlinedButton(
-                  onPressed: () => _goToHome(context),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(
-                      color: Color(0xFF8B5CF6),
-                      width: 1.5,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: Text(
-                    'Continue as Guest',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 28),
-
-              Text(
-                'By continuing you agree to our',
-                style: GoogleFonts.poppins(
-                  color: Colors.white38,
-                  fontSize: 12,
-                ),
-              ),
-
-              const SizedBox(height: 4),
-
-              Text(
-                'Terms of Service • Privacy Policy',
-                style: GoogleFonts.poppins(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
-        ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+
+                  // Brand Icon
+                  Hero(
+                    tag: 'ryvo_logo',
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: SpotifyColors.surfaceElevated,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: SpotifyColors.green.withValues(alpha: 0.2),
+                            blurRadius: 30,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Image(
+                        image: AssetImage('assets/icon/ryvo-icon.png'),
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  Text(
+                    'RYVO',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 42,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 4,
+                      color: SpotifyColors.textPrimary,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    'Millions of songs.\nFree on RYVO.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textSecondary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
+                    ),
+                  ),
+
+                  const Spacer(flex: 3),
+
+                  // Google Sign In Pill Button (Spotify Green)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _signInWithGoogle(context),
+                      icon: const Icon(
+                        Icons.g_mobiledata,
+                        size: 32,
+                        color: Colors.black,
+                      ),
+                      label: Text(
+                        'Continue with Google',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: SpotifyColors.green,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Guest Button (Clean Outline Pill)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: () => _goToHome(context),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                          color: Colors.white24,
+                          width: 1.2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      child: Text(
+                        'Continue as Guest',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: SpotifyColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  Text(
+                    'By continuing you agree to RYVO Terms & Privacy Policy',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
-}
+}

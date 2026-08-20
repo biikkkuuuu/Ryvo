@@ -1,6 +1,8 @@
+
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:music_app/models/song.dart';
 
 class LibraryService {
@@ -10,15 +12,27 @@ class LibraryService {
 
   SharedPreferences? _prefs;
 
-  static const String _likedKey = 'ryvo_liked_songs';
-  static const String _recentKey = 'ryvo_recently_played';
+  static const String _likedKeyBase = 'ryvo_liked_songs';
+  static const String _recentKeyBase = 'ryvo_recently_played';
+  static const String _searchHistoryKeyBase = 'ryvo_search_history';
 
   // ============================================================
   // PLAYLIST STORAGE
   // ============================================================
 
-  static const String _playlistNamesKey = 'ryvo_playlist_names';
-  static const String _playlistPrefix = 'ryvo_playlist_';
+  static const String _playlistNamesKeyBase = 'ryvo_playlist_names';
+  static const String _playlistPrefixBase = 'ryvo_playlist_';
+
+  String get _userPrefix {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return 'ryvo_user_${uid == null || uid.isEmpty ? 'guest' : uid}';
+  }
+
+  String get _likedKey => '${_userPrefix}_$_likedKeyBase';
+  String get _recentKey => '${_userPrefix}_$_recentKeyBase';
+  String get _searchHistoryKey => '${_userPrefix}_$_searchHistoryKeyBase';
+  String get _playlistNamesKey => '${_userPrefix}_$_playlistNamesKeyBase';
+  String get _playlistPrefix => '${_userPrefix}_$_playlistPrefixBase';
 
   // ============================================================
   // INITIALISE
@@ -91,6 +105,50 @@ class LibraryService {
       )
           .toList(),
     );
+  }
+
+  // ============================================================
+  // SEARCH HISTORY
+  // ============================================================
+
+  Future<void> addSearchQuery(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return;
+
+    await init();
+    final history = _prefs!.getStringList(_searchHistoryKey) ?? <String>[];
+    history.removeWhere(
+          (item) => item.toLowerCase() == cleanQuery.toLowerCase(),
+    );
+    history.insert(0, cleanQuery);
+
+    if (history.length > 30) {
+      history.removeRange(30, history.length);
+    }
+
+    await _prefs!.setStringList(_searchHistoryKey, history);
+  }
+
+  Future<List<String>> getSearchHistory() async {
+    await init();
+    return List<String>.from(
+      _prefs!.getStringList(_searchHistoryKey) ?? <String>[],
+    );
+  }
+
+  Future<void> removeSearchQuery(String query) async {
+    await init();
+    final cleanQuery = query.trim();
+    final history = _prefs!.getStringList(_searchHistoryKey) ?? <String>[];
+    history.removeWhere(
+          (item) => item.toLowerCase() == cleanQuery.toLowerCase(),
+    );
+    await _prefs!.setStringList(_searchHistoryKey, history);
+  }
+
+  Future<void> clearSearchHistory() async {
+    await init();
+    await _prefs!.remove(_searchHistoryKey);
   }
 
   // ============================================================
@@ -213,6 +271,18 @@ class LibraryService {
     return true;
   }
 
+  Future<void> addLiked(
+      Song song,
+      ) async {
+    if (song.id.isEmpty) return;
+    await init();
+    final songs = _readSongs(_likedKey);
+    if (!songs.any((s) => s.id == song.id)) {
+      songs.insert(0, song);
+      await _saveSongs(_likedKey, songs);
+    }
+  }
+
   Future<void> removeLiked(
       String songId,
       ) async {
@@ -228,6 +298,12 @@ class LibraryService {
       _likedKey,
       songs,
     );
+  }
+
+  Future<List<Song>> getPlaylistSongs(
+      String name,
+      ) async {
+    return getPlaylist(name);
   }
 
   Future<void> clearLikedSongs() async {

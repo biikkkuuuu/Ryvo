@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
@@ -269,6 +269,65 @@ class JioSaavnService {
   }
 
   // ============================================================
+  // ALBUM DETAILS
+  // ============================================================
+  // Backend route is GET /api/albums?id=<albumId>.
+  // The response contains `songs`, each with its own artwork.
+
+  Future<dynamic> getAlbum(
+      String albumId,
+      ) async {
+    final id = albumId.trim();
+
+    if (id.isEmpty) {
+      throw Exception(
+        'Album ID is empty',
+      );
+    }
+
+    return _get(
+      '/api/albums',
+      {
+        'id': id,
+      },
+    );
+  }
+
+  // ============================================================
+  // HOME - NEWLY RELEASED
+  // ============================================================
+
+  Future<List<dynamic>> getHomeNewReleases() async {
+    final data = await _get(
+      '/api/search/songs',
+      {
+        'query': 'newly released songs',
+        'page': '0',
+        'limit': '20',
+      },
+    );
+
+    return _extractResults(data);
+  }
+
+  // ============================================================
+  // HOME - TOP PLAYLISTS
+  // ============================================================
+
+  Future<List<dynamic>> getTopPlaylists() async {
+    final data = await _get(
+      '/api/home/top-playlists',
+      {},
+    );
+
+    if (data is List) {
+      return List<dynamic>.from(data);
+    }
+
+    return [];
+  }
+
+  // ============================================================
   // HELPERS
   // ============================================================
 
@@ -279,18 +338,25 @@ class JioSaavnService {
       final results = data['results'];
 
       if (results is List) {
-        return List<dynamic>.from(
-          results,
-        );
+        return List<dynamic>.from(results);
       }
     }
 
     if (data is List) {
-      return List<dynamic>.from(
-        data,
-      );
+      return List<dynamic>.from(data);
     }
 
     return [];
+  }
+
+  // ============================================================
+  // HOME - LIVE HOME MODULES
+  // ============================================================
+
+  Future<dynamic> getHome() async {
+    return _get(
+      '/api/home',
+      {},
+    );
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:music_app/app/theme_controller.dart';
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/models/song.dart';
+import 'package:music_app/theme/app_theme.dart';
 import 'package:music_app/widgets/song_playlist_picker.dart';
 
 class PlaylistScreen extends StatelessWidget {
@@ -19,20 +21,29 @@ class PlaylistScreen extends StatelessWidget {
     required this.songs,
   });
 
-  void openSong(
-      BuildContext context,
-      int index,
-      ) {
-    final song = songs[index];
+  String decodeHtml(String text) {
+    return text
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#34;', '"')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&#38;', '&')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&#x27;', "'");
+  }
 
+  void _openSong(BuildContext context, int index) {
+    HapticFeedback.lightImpact();
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PlayerScreen(
-          title: song.title,
-          artist: song.artist,
-          image: song.thumbnail,
-          songId: song.id,
+          title: songs[index].title,
+          artist: songs[index].artist,
+          image: songs[index].thumbnail,
+          songId: songs[index].id,
           playlist: songs,
           currentIndex: index,
         ),
@@ -42,346 +53,215 @@ class PlaylistScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentTheme = RyvoThemeController.themes[
+        RyvoThemeController.instance.selectedTheme];
+
     return Scaffold(
-      backgroundColor: const Color(0xff070B0C),
-
-      appBar: AppBar(
-        backgroundColor: const Color(0xff070B0C),
-        elevation: 0,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
-        title: Text(
-          playlistName,
-          style: GoogleFonts.poppins(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
+      backgroundColor: SpotifyColors.background,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // ======================================================
-          // PLAYLIST HEADER
-          // ======================================================
-
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                20,
-                10,
-                20,
-                20,
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 190,
-                    height: 190,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xffA78BFA),
-                          Color(0xff5B21B6),
-                        ],
+          // Collapsible Ambient Header
+          SliverAppBar(
+            expandedHeight: 260,
+            pinned: true,
+            backgroundColor: SpotifyColors.background,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      currentTheme.primaryDark.withValues(alpha: 0.6),
+                      SpotifyColors.background,
+                    ],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: SpotifyColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          icon,
+                          color: currentTheme.primary,
+                          size: 54,
+                        ),
                       ),
-                      borderRadius:
-                      BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xff8B5CF6,
-                          ).withOpacity(0.25),
-                          blurRadius: 30,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      icon,
-                      color: Colors.white,
-                      size: 80,
-                    ),
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  Text(
-                    playlistName,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-
-                  const SizedBox(height: 5),
-
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white54,
-                      fontSize: 13,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  Text(
-                    "${songs.length} songs",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white38,
-                      fontSize: 12,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // PLAY ALL
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton.icon(
-                      onPressed: songs.isEmpty
-                          ? null
-                          : () {
-                        openSong(context, 0);
-                      },
-                      style:
-                      ElevatedButton.styleFrom(
-                        backgroundColor:
-                        const Color(
-                          0xff8B5CF6,
-                        ),
-                        disabledBackgroundColor:
-                        Colors.white12,
-                        shape:
-                        RoundedRectangleBorder(
-                          borderRadius:
-                          BorderRadius.circular(
-                            18,
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          decodeHtml(playlistName),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: SpotifyColors.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
                           ),
                         ),
                       ),
-                      icon: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        "Play All",
-                        style:
-                        GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight:
-                          FontWeight.w600,
+                      const SizedBox(height: 4),
+                      Text(
+                        '${decodeHtml(subtitle)} • ${songs.length} songs',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: SpotifyColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
 
-          // ======================================================
-          // SONG LIST
-          // ======================================================
-
-          if (songs.isEmpty)
+          // Play All / Shuffle Button Row
+          if (songs.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding:
-                const EdgeInsets.all(30),
-                child: Center(
-                  child: Text(
-                    "No songs in this playlist",
-                    style:
-                    GoogleFonts.poppins(
-                      color: Colors.white54,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Tracks',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: SpotifyColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                      ),
                     ),
+                    GestureDetector(
+                      onTap: () => _openSong(context, 0),
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: currentTheme.primary,
+                          boxShadow: [
+                            BoxShadow(
+                              color: currentTheme.primary.withValues(alpha: 0.35),
+                              blurRadius: 14,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.black,
+                          size: 32,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Track List
+          if (songs.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  'No songs in this playlist.',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: SpotifyColors.textSecondary,
+                    fontSize: 14,
                   ),
                 ),
               ),
             )
           else
-            SliverPadding(
-              padding:
-              const EdgeInsets.fromLTRB(
-                16,
-                0,
-                16,
-                30,
-              ),
-              sliver: SliverList(
-                delegate:
-                SliverChildBuilderDelegate(
-                      (context, index) {
-                    final song = songs[index];
-
-                    return _songTile(
-                      context,
-                      song,
-                      index,
-                    );
-                  },
-                  childCount: songs.length,
-                ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final song = songs[index];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: SizedBox(
+                        width: 46,
+                        height: 46,
+                        child: song.thumbnail.isNotEmpty
+                            ? Image.network(song.thumbnail, fit: BoxFit.cover)
+                            : Container(color: SpotifyColors.surfaceElevated),
+                      ),
+                    ),
+                    title: Text(
+                      decodeHtml(song.title),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: SpotifyColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      decodeHtml(song.artist),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: SpotifyColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.more_vert_rounded,
+                        color: SpotifyColors.textSecondary,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: SpotifyColors.surfaceElevated,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                          ),
+                          builder: (_) => SongPlaylistPicker(song: song),
+                        );
+                      },
+                    ),
+                    onTap: () => _openSong(context, index),
+                  );
+                },
+                childCount: songs.length,
               ),
             ),
+
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 60),
+          ),
         ],
       ),
     );
-  }
-
-  // ============================================================
-  // SONG TILE
-  // ============================================================
-
-  Widget _songTile(
-      BuildContext context,
-      Song song,
-      int index,
-      ) {
-    return GestureDetector(
-      onTap: () => openSong(
-        context,
-        index,
-      ),
-      onLongPress: () {
-        HapticFeedback.mediumImpact();
-        SongPlaylistPicker.show(context, song);
-      },
-      child: Container(
-        margin:
-        const EdgeInsets.only(bottom: 10),
-        padding:
-        const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xff111718),
-          borderRadius:
-          BorderRadius.circular(17),
-          border: Border.all(
-            color: Colors.white10,
-          ),
-        ),
-        child: Row(
-          children: [
-            // NUMBER
-            SizedBox(
-              width: 25,
-              child: Text(
-                "${index + 1}",
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  color: Colors.white38,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 8),
-
-            // IMAGE
-            ClipRRect(
-              borderRadius:
-              BorderRadius.circular(12),
-              child: Image.network(
-                song.thumbnail,
-                width: 55,
-                height: 55,
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (context, error, stackTrace) {
-                  return Container(
-                    width: 55,
-                    height: 55,
-                    color:
-                    const Color(0xff202324),
-                    child: const Icon(
-                      Icons
-                          .music_note_rounded,
-                      color: Colors.white54,
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(width: 13),
-
-            // TITLE + ARTIST
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    decode(song.title),
-                    maxLines: 1,
-                    overflow:
-                    TextOverflow.ellipsis,
-                    style:
-                    GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight:
-                      FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 3),
-
-                  Text(
-                    decode(song.artist),
-                    maxLines: 1,
-                    overflow:
-                    TextOverflow.ellipsis,
-                    style:
-                    GoogleFonts.poppins(
-                      color: Colors.white54,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(width: 8),
-
-            // PLAY
-            Container(
-              width: 38,
-              height: 38,
-              decoration:
-              const BoxDecoration(
-                color: Color(0xff8B5CF6),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String decode(String text) {
-    return text
-        .replaceAll('&quot;', '"')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>');
   }
 }

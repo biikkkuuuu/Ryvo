@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:music_app/app/theme_controller.dart';
 import 'package:music_app/features/home/home_screen.dart';
 import 'package:music_app/features/welcome/welcome_screen.dart';
+import 'package:music_app/theme/app_theme.dart';
 
 class RyvoApp extends StatefulWidget {
   const RyvoApp({super.key});
@@ -39,40 +40,7 @@ class _RyvoAppState extends State<RyvoApp> {
     final theme =
     RyvoThemeController.themes[_themeController.selectedTheme];
 
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      colorScheme: ColorScheme.dark(
-        primary: theme.primary,
-        secondary: theme.primaryLight,
-        primaryContainer: theme.primaryDark,
-        surface: Colors.black,
-      ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: theme.primaryLight,
-      ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith<Color?>(
-              (states) {
-            if (states.contains(WidgetState.selected)) {
-              return theme.primaryLight;
-            }
-            return Colors.white54;
-          },
-        ),
-        trackColor: WidgetStateProperty.resolveWith<Color?>(
-              (states) {
-            if (states.contains(WidgetState.selected)) {
-              return theme.primaryDark;
-            }
-            return Colors.white12;
-          },
-        ),
-      ),
-    );
+    return AppTheme.buildTheme(primary: theme.primary);
   }
 
   @override
