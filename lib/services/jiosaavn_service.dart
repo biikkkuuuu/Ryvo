@@ -327,6 +327,27 @@ class JioSaavnService {
     return [];
   }
 
+
+  // ============================================================
+  // RADIO STATIONS
+  // ============================================================
+
+  Future<List<dynamic>> getRadioStations(List<String> songIds) async {
+  if (songIds.isEmpty) return [];
+
+  final data = await _get(
+    '/api/radio',
+    {
+      'ids': songIds.take(10).join(','),
+    },
+  );
+
+  if (data is List) {
+    return List<dynamic>.from(data);
+  }
+
+  return [];
+}
   // ============================================================
   // HELPERS
   // ============================================================
@@ -360,3 +381,8 @@ class JioSaavnService {
     );
   }
 }
+
+
+
+
+

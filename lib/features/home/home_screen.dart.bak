@@ -1,4 +1,5 @@
-
+Get-ChildItem "lib\features\home" -Recurse -File -Filter "*.dart" |
+Select-String -Pattern "getHomeBundle|getHomeSections|playlists|shows|discover" -Context 3,6
 
 
 import 'dart:ui';

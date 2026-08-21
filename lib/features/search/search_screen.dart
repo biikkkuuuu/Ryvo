@@ -7,6 +7,7 @@ import 'package:music_app/app/theme_controller.dart';
 import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/repositories/music_repository.dart';
+import 'package:music_app/features/artist/artist_profile_screen.dart';
 import 'package:music_app/theme/app_theme.dart';
 import 'package:music_app/widgets/song_playlist_picker.dart';
 
@@ -23,6 +24,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final MusicRepository _repository = MusicRepository();
 
   List<Song> _searchResults = [];
+  List<SearchArtistResult> _fullSearchArtists = [];
   List<Song> _songSuggestions = [];
   List<SearchArtistResult> _artistSuggestions = [];
   List<SearchPlaylistResult> _playlistSuggestions = [];
@@ -36,14 +38,46 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _debounce;
 
   final List<Map<String, dynamic>> _browseCategories = [
-    {'title': 'Pop Hits', 'color': const Color(0xFF1E3264), 'icon': Icons.music_note_rounded},
-    {'title': 'Bollywood', 'color': const Color(0xFFE91429), 'icon': Icons.movie_filter_rounded},
-    {'title': 'Punjabi', 'color': const Color(0xFFE8115B), 'icon': Icons.flash_on_rounded},
-    {'title': 'Lo-Fi & Chill', 'color': const Color(0xFF477D95), 'icon': Icons.nightlight_round},
-    {'title': 'Hip-Hop', 'color': const Color(0xFFBA5D07), 'icon': Icons.speaker_group_rounded},
-    {'title': 'Indie Vibes', 'color': const Color(0xFF8D67AB), 'icon': Icons.graphic_eq_rounded},
-    {'title': 'Romantic', 'color': const Color(0xFF8C1932), 'icon': Icons.favorite_rounded},
-    {'title': 'Workout Beat', 'color': const Color(0xFF006450), 'icon': Icons.fitness_center_rounded},
+    {
+      'title': 'Pop Hits',
+      'color': const Color(0xFF1E3264),
+      'icon': Icons.music_note_rounded,
+    },
+    {
+      'title': 'Bollywood',
+      'color': const Color(0xFFE91429),
+      'icon': Icons.movie_filter_rounded,
+    },
+    {
+      'title': 'Punjabi',
+      'color': const Color(0xFFE8115B),
+      'icon': Icons.flash_on_rounded,
+    },
+    {
+      'title': 'Lo-Fi & Chill',
+      'color': const Color(0xFF477D95),
+      'icon': Icons.nightlight_round,
+    },
+    {
+      'title': 'Hip-Hop',
+      'color': const Color(0xFFBA5D07),
+      'icon': Icons.speaker_group_rounded,
+    },
+    {
+      'title': 'Indie Vibes',
+      'color': const Color(0xFF8D67AB),
+      'icon': Icons.graphic_eq_rounded,
+    },
+    {
+      'title': 'Romantic',
+      'color': const Color(0xFF8C1932),
+      'icon': Icons.favorite_rounded,
+    },
+    {
+      'title': 'Workout Beat',
+      'color': const Color(0xFF006450),
+      'icon': Icons.fitness_center_rounded,
+    },
   ];
 
   @override
@@ -107,6 +141,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _artistSuggestions = [];
         _playlistSuggestions = [];
         _searchResults = [];
+        _fullSearchArtists = [];
         _searching = false;
       });
       return;
@@ -151,10 +186,14 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final songs = await _repository.search(q, pages: 2);
+      final results = await Future.wait([
+        _repository.search(q, pages: 2),
+        _repository.artistSuggestions(q),
+      ]);
       if (!mounted) return;
       setState(() {
-        _searchResults = songs;
+        _searchResults = results[0] as List<Song>;
+        _fullSearchArtists = results[1] as List<SearchArtistResult>;
         _loading = false;
       });
     } catch (e) {
@@ -196,10 +235,23 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  void _openArtist(SearchArtistResult artist) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ArtistProfileScreen(
+          artistId: artist.id,
+          artistName: artist.name,
+          artistImage: artist.image,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final currentTheme = RyvoThemeController.themes[
-        RyvoThemeController.instance.selectedTheme];
+    final currentTheme =
+        RyvoThemeController.themes[RyvoThemeController.instance.selectedTheme];
 
     final isTyping = _controller.text.trim().isNotEmpty;
 
@@ -284,11 +336,13 @@ class _SearchScreenState extends State<SearchScreen> {
                         color: currentTheme.primary,
                       ),
                     )
-                  : (_searching && _searchResults.isNotEmpty)
-                      ? _buildFullSearchResults(currentTheme.primary)
-                      : isTyping
-                          ? _buildLiveSuggestions(currentTheme.primary)
-                          : _buildBrowseAndHistory(currentTheme.primary),
+                  : (_searching &&
+                        (_searchResults.isNotEmpty ||
+                            _fullSearchArtists.isNotEmpty))
+                  ? _buildFullSearchResults(currentTheme.primary)
+                  : isTyping
+                  ? _buildLiveSuggestions(currentTheme.primary)
+                  : _buildBrowseAndHistory(currentTheme.primary),
             ),
 
             // Space for Bottom Nav Bar & Mini Player
@@ -527,7 +581,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     : null,
                 backgroundColor: SpotifyColors.surfaceElevated,
                 child: artist.image.isEmpty
-                    ? const Icon(Icons.person, color: SpotifyColors.textSecondary)
+                    ? const Icon(
+                        Icons.person,
+                        color: SpotifyColors.textSecondary,
+                      )
                     : null,
               ),
               title: Text(
@@ -545,10 +602,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   fontSize: 12,
                 ),
               ),
-              onTap: () {
-                _controller.text = artist.name;
-                _performSearch(artist.name);
-              },
+              onTap: () => _openArtist(artist),
             );
           }),
         ],
@@ -612,9 +666,43 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _searchResults.length,
+      itemCount: _fullSearchArtists.length + _searchResults.length,
       itemBuilder: (context, index) {
-        final song = _searchResults[index];
+        if (index < _fullSearchArtists.length) {
+          final artist = _fullSearchArtists[index];
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(vertical: 2),
+            leading: CircleAvatar(
+              radius: 24,
+              backgroundColor: SpotifyColors.surfaceElevated,
+              backgroundImage: artist.image.isNotEmpty
+                  ? NetworkImage(artist.image)
+                  : null,
+              child: artist.image.isEmpty
+                  ? const Icon(Icons.person, color: SpotifyColors.textSecondary)
+                  : null,
+            ),
+            title: Text(
+              decodeHtml(artist.name),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.plusJakartaSans(
+                color: SpotifyColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              'Artist',
+              style: GoogleFonts.plusJakartaSans(
+                color: SpotifyColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            onTap: () => _openArtist(artist),
+          );
+        }
+        final song = _searchResults[index - _fullSearchArtists.length];
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(vertical: 2),
           leading: ClipRRect(
