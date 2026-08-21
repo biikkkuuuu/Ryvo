@@ -485,6 +485,17 @@ List<SearchPlaylistResult> _homePlaylists = [];
 List<SearchAlbumResult> _homeAlbums = [];
 List<dynamic> _radioStations = [];
   List<SearchPlaylistResult> _moodPlaylists = [];
+  String? _selectedMood;
+  bool _loadingMoodPlaylists = false;
+
+  static const List<Map<String, dynamic>> _moods = [
+    {'label': 'Romantic', 'query': 'Romantic Hindi', 'icon': Icons.favorite_rounded},
+    {'label': 'Sad', 'query': 'Sad Hindi', 'icon': Icons.nights_stay_rounded},
+    {'label': 'Party', 'query': 'Party Hindi', 'icon': Icons.celebration_rounded},
+    {'label': 'Chill', 'query': 'Chill Hindi', 'icon': Icons.spa_rounded},
+    {'label': 'Workout', 'query': 'Workout Hindi', 'icon': Icons.fitness_center_rounded},
+    {'label': 'Focus', 'query': 'Focus Hindi', 'icon': Icons.psychology_rounded},
+  ];
 
 bool _loading = true;
 String? _error;
@@ -509,26 +520,27 @@ return 'Good evening';
 }
 }
 
-Future<List<SearchPlaylistResult>> _loadMoodPlaylists() async {
-    const moodQueries = [
-      'Romantic Hindi',
-      'Sad Hindi',
-      'Party Hindi',
-      'Chill Hindi',
-      'Workout Hindi',
-    ];
+Future<void> _loadMoodPlaylists(Map<String, dynamic> mood) async {
+  final label = mood['label'] as String;
+  final query = mood['query'] as String;
+  setState(() {
+    _selectedMood = label;
+    _loadingMoodPlaylists = true;
+    _moodPlaylists = [];
+  });
 
-    final results = await Future.wait(
-      moodQueries.map(_repository.playlistSuggestions),
-    );
-
-    final seen = <String>{};
-    return results
-        .expand((playlists) => playlists)
-        .where((playlist) => seen.add(playlist.id))
-        .take(15)
-        .toList();
+  try {
+    final playlists = await _repository.playlistSuggestions(query);
+    if (!mounted || _selectedMood != label) return;
+    setState(() {
+      _moodPlaylists = playlists;
+      _loadingMoodPlaylists = false;
+    });
+  } catch (_) {
+    if (!mounted || _selectedMood != label) return;
+    setState(() => _loadingMoodPlaylists = false);
   }
+}
 
   Future<void> _loadRadioStations() async {
   try {
@@ -586,21 +598,18 @@ await LibraryService.instance.init();
 final results = await Future.wait([
 _repository.getHomeBundle(),
 LibraryService.instance.getRecentlyPlayed(),
-_loadMoodPlaylists(),
 ]);
 
 if (!mounted) return;
 
 final home = results[0] as Map<String, dynamic>;
 final recent = results[1] as List<Song>;
-final moods = results[2] as List<SearchPlaylistResult>;
 
 setState(() {
 _sections = home['sections'] as Map<String, List<Song>>? ?? {};
 _homePlaylists = home['playlists'] as List<SearchPlaylistResult>? ?? [];
 _homeAlbums = home['albums'] as List<SearchAlbumResult>? ?? [];
 _recentlyPlayed = recent;
-_moodPlaylists = moods;
 _loading = false;
 _error = null;
 });
@@ -885,11 +894,21 @@ else ...[
                   currentTheme.primary,
                 ),
               ),
-            // 7. MOODS ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â real JioSaavn playlist search results
+            if (_selectedFilterIndex == 3)
+              SliverToBoxAdapter(
+                child: _buildMoodCategories(currentTheme.primary),
+              ),
+            if (_selectedFilterIndex == 3 && _loadingMoodPlaylists)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
             if (_selectedFilterIndex == 3 && _moodPlaylists.isNotEmpty)
               SliverToBoxAdapter(
                 child: _buildPlaylistsSection(
-                  'Moods',
+                  _selectedMood ?? 'Moods',
                   _moodPlaylists,
                   currentTheme.primary,
                 ),
@@ -908,6 +927,79 @@ else ...[
 // ============================================================
 // QUICK ACCESS 2-COLUMN GRID
 // ============================================================
+Widget _buildMoodCategories(Color accentColor) {
+return Padding(
+  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'Pick a mood',
+        style: GoogleFonts.plusJakartaSans(
+          color: SpotifyColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      const SizedBox(height: 12),
+      GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisExtent: 76,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: _moods.length,
+        itemBuilder: (context, index) {
+          final mood = _moods[index];
+          final label = mood['label'] as String;
+          final selected = _selectedMood == label;
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _loadMoodPlaylists(mood);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: selected
+                    ? accentColor.withValues(alpha: 0.28)
+                    : SpotifyColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: selected ? accentColor : Colors.white10,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(mood['icon'] as IconData,
+                      color: selected ? accentColor : SpotifyColors.textSecondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: SpotifyColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ],
+  ),
+);
+}
+
 Widget _buildQuickAccessGrid(Color accentColor) {
 // Gather quick items from sections or recently played
 final List<Song> quickSongs = [];
