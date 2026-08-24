@@ -496,6 +496,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   List<SearchPlaylistResult> _moodPlaylists = [];
   String? _selectedMood;
   bool _loadingMoodPlaylists = false;
+  bool _loadingRadio = false;
 
   static const List<Map<String, dynamic>> _moods = [
     {
@@ -568,31 +569,37 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   }
 
   Future<void> _loadRadioStations() async {
+    if (!mounted) return;
+    setState(() => _loadingRadio = true);
+
     try {
       final songIds = <String>[];
 
-      for (final songs in _sections.values) {
-        for (final song in songs) {
-          final id = song.id.trim();
-
-          if (id.isNotEmpty && !songIds.contains(id)) {
-            songIds.add(id);
-          }
-
-          if (songIds.length == 10) break;
+      for (final song in _recentlyPlayed) {
+        final id = song.id.trim();
+        if (id.isNotEmpty && !songIds.contains(id)) {
+          songIds.add(id);
         }
-
         if (songIds.length == 10) break;
       }
 
-      if (songIds.isEmpty) {
-        debugPrint('RYVO RADIO: No live song IDs available.');
-        return;
+      if (songIds.length < 10) {
+        for (final songs in _sections.values) {
+          for (final song in songs) {
+            final id = song.id.trim();
+            if (id.isNotEmpty && !songIds.contains(id)) {
+              songIds.add(id);
+            }
+            if (songIds.length == 10) break;
+          }
+          if (songIds.length == 10) break;
+        }
       }
 
-      debugPrint(
-        'RYVO RADIO: requesting  live song IDs',
-      );
+      if (songIds.isEmpty) {
+        if (mounted) setState(() => _loadingRadio = false);
+        return;
+      }
 
       final stations = await _repository.getRadioStations(songIds);
 
@@ -600,21 +607,26 @@ class _HomeTabContentState extends State<_HomeTabContent> {
 
       setState(() {
         _radioStations = stations;
+        _loadingRadio = false;
       });
-
-      debugPrint(
-        'RYVO RADIO: received  stations',
-      );
     } catch (e) {
       debugPrint('RYVO RADIO ERROR: $e');
+      if (mounted) setState(() => _loadingRadio = false);
     }
   }
 
   Future<void> _loadHomeData({bool showLoader = true}) async {
-    if (mounted && showLoader) {
+    if (mounted) {
       setState(() {
-        _loading = true;
+        if (showLoader) _loading = true;
         _error = null;
+        // Wipe state clean so stale data is completely purged on refresh
+        _sections = {};
+        _homePlaylists = [];
+        _homeAlbums = [];
+        _recentlyPlayed = [];
+        _radioStations = [];
+        _loadingRadio = false;
       });
     }
 
@@ -673,6 +685,10 @@ class _HomeTabContentState extends State<_HomeTabContent> {
     final currentTheme = RyvoThemeController
         .themes[RyvoThemeController.instance.selectedTheme];
 
+    // DYNAMIC HEADER HEIGHT FIX: Eliminates the large blank gap below chips
+    final topPadding = MediaQuery.of(context).padding.top;
+    final headerHeight = topPadding + 108.0;
+
     return RefreshIndicator(
       onRefresh: () => _loadHomeData(showLoader: false),
       color: currentTheme.primary,
@@ -686,8 +702,8 @@ class _HomeTabContentState extends State<_HomeTabContent> {
           SliverPersistentHeader(
             pinned: true,
             delegate: _PinnedHomeHeaderDelegate(
-              minHeight: 190,
-              maxHeight: 190,
+              minHeight: headerHeight,
+              maxHeight: headerHeight,
               child: SafeArea(
                 bottom: false,
                 child: Container(
@@ -759,6 +775,9 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                                 setState(() {
                                   _selectedFilterIndex = index;
                                 });
+                                if (index == 4 && _radioStations.isEmpty && !_loadingRadio) {
+                                  _loadRadioStations();
+                                }
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
@@ -843,23 +862,39 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                 ),
               ),
 
-            // 2. FOR YOU / PLAYLISTS CAROUSEL
+            // 2. FOR YOU SONGS (Personalized track carousel)
+            if (_selectedFilterIndex == 0)
+              Builder(builder: (context) {
+                final forYouSongs =
+                    _sections['Made For You'] ?? _sections['For You'] ?? [];
+                if (forYouSongs.isEmpty) return const SliverToBoxAdapter();
+                
+                return SliverToBoxAdapter(
+                  child: _buildTrackSection(
+                    'For You',
+                    forYouSongs,
+                    currentTheme.primary,
+                  ),
+                );
+              }),
+
+            // 3. TOP PLAYLISTS CAROUSEL
             if (_selectedFilterIndex == 0 && _homePlaylists.isNotEmpty)
               SliverToBoxAdapter(
                 child: _buildPlaylistsSection(
-                  'For You',
+                  'Top Playlists',
                   _homePlaylists,
                   currentTheme.primary,
                 ),
               ),
 
-            // 3. RECENTLY PLAYED SECTION
+            // 4. RECENTLY PLAYED SECTION
             if (_selectedFilterIndex == 0 && _recentlyPlayed.isNotEmpty)
               SliverToBoxAdapter(
                 child: _buildRecentlyPlayedSection(currentTheme.primary),
               ),
 
-            // 4. POPULAR ALBUMS CAROUSEL
+            // 5. POPULAR ALBUMS CAROUSEL
             if (_selectedFilterIndex == 0 && _homeAlbums.isNotEmpty)
               SliverToBoxAdapter(
                 child: _buildAlbumsSection(
@@ -868,12 +903,14 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                   currentTheme.primary,
                 ),
               ),
-              
-            // 5. MUSIC SECTIONS
-            // All + Music: show real API music sections, excluding Charts.
+
+            // 6. MUSIC SECTIONS (Trending, Newly Released, etc.)
             if (_selectedFilterIndex == 0 || _selectedFilterIndex == 1)
               ..._sections.entries
-                  .where((entry) => entry.key != 'Charts')
+                  .where((entry) => 
+                      entry.key != 'Charts' && 
+                      entry.key != 'Made For You' && 
+                      entry.key != 'For You')
                   .map((entry) {
                 if (entry.value.isEmpty) {
                   return const SliverToBoxAdapter();
@@ -887,25 +924,25 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                 );
               }),
 
-            // 6. CHARTS real backend chart data
-            if (_selectedFilterIndex == 2 &&
-                (_sections['Charts'] ?? []).isNotEmpty)
-              SliverToBoxAdapter(
-                child: _buildTrackSection(
-                  'Charts',
-                  _sections['Charts']!,
-                  currentTheme.primary,
-                ),
-              ),
+            // 7. CHARTS (With smart fallback)
+            if (_selectedFilterIndex == 2)
+              Builder(builder: (context) {
+                List<Song> chartSongs = _sections['Charts'] ?? [];
+                if (chartSongs.isEmpty) {
+                  chartSongs = _sections['Trending'] ?? _sections['Newly Released'] ?? [];
+                }
+                if (chartSongs.isEmpty) return const SliverToBoxAdapter();
+                
+                return SliverToBoxAdapter(
+                  child: _buildTrackSection(
+                    'Charts',
+                    chartSongs,
+                    currentTheme.primary,
+                  ),
+                );
+              }),
 
-            // 7. RADIO
-            if (_selectedFilterIndex == 4 && _radioStations.isNotEmpty)
-              SliverToBoxAdapter(
-                child: _buildRadioSection(
-                  _radioStations,
-                  currentTheme.primary,
-                ),
-              ),
+            // 8. MOODS
             if (_selectedFilterIndex == 3)
               SliverToBoxAdapter(
                 child: _buildMoodCategories(currentTheme.primary),
@@ -925,6 +962,63 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                   currentTheme.primary,
                 ),
               ),
+
+            // 9. RADIO (With Retry & Empty State)
+            if (_selectedFilterIndex == 4)
+              if (_loadingRadio)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_radioStations.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: _buildRadioSection(
+                    _radioStations,
+                    currentTheme.primary,
+                  ),
+                )
+              else
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.radio_rounded,
+                          size: 48,
+                          color: SpotifyColors.textSecondary,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Radio is unavailable right now',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: SpotifyColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: currentTheme.primary,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          ),
+                          onPressed: _loadRadioStations,
+                          child: Text(
+                            'Retry',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
             // Padding at bottom for Mini Player & Nav Bar
             const SliverToBoxAdapter(
@@ -1015,7 +1109,6 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   }
 
   Widget _buildQuickAccessGrid(Color accentColor) {
-    // Gather quick items from sections or recently played
     final List<Song> quickSongs = [];
     if (_recentlyPlayed.isNotEmpty) {
       quickSongs.addAll(_recentlyPlayed.take(4));
