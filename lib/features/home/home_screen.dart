@@ -1,5 +1,4 @@
-﻿
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -685,18 +684,7 @@ SliverPersistentHeader(
                 ),
                 Row(
                   children: [
-                    IconButton(
-                      splashRadius: 22,
-                      icon: const Icon(
-                        Icons.bolt_rounded,
-                        color: SpotifyColors.textPrimary,
-                        size: 24,
-                      ),
-                      onPressed: () {
-                        _loadHomeData(showLoader: false);
-                      },
-                    ),
-                    const SizedBox(width: 4),
+                    // Lightning/Bolt icon and its spacing have been removed.
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -828,12 +816,12 @@ else ...[
                 ),
               ),
 
-            // 2. MADE FOR YOU / PLAYLISTS CAROUSEL
+            // 2. FOR YOU / PLAYLISTS CAROUSEL
             if (_selectedFilterIndex == 0 &&
                 _homePlaylists.isNotEmpty)
               SliverToBoxAdapter(
                 child: _buildPlaylistsSection(
-                  'Made For You',
+                  'For You', // Changed from 'Made For You'
                   _homePlaylists,
                   currentTheme.primary,
                 ),
@@ -877,7 +865,7 @@ else ...[
               }),
 
 
-            // 6. CHARTS ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â real backend chart data
+            // 6. CHARTS real backend chart data
             if (_selectedFilterIndex == 2 &&
                 (_sections['Charts'] ?? []).isNotEmpty)
               SliverToBoxAdapter(
@@ -1370,7 +1358,7 @@ color: SpotifyColors.textSecondary,
 ),
 ),
 )
-    : Container(
+  : Container(
 color: SpotifyColors.surfaceElevated,
 child: const Icon(
 Icons.music_note_rounded,
@@ -1481,7 +1469,7 @@ color: SpotifyColors.textSecondary,
 ),
 ),
 )
-    : Container(
+  : Container(
 color: SpotifyColors.surfaceElevated,
 child: const Icon(
 Icons.album_rounded,
@@ -1570,7 +1558,7 @@ color: SpotifyColors.textSecondary,
 ),
 ),
 )
-    : Container(
+  : Container(
 color: SpotifyColors.surfaceElevated,
 child: const Icon(
 Icons.music_note_rounded,
@@ -1624,29 +1612,6 @@ const SizedBox(height: 16),
 );
 }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class _PinnedHomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   final double minHeight;
