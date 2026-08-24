@@ -6,15 +6,17 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/services/library_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AudioService {
-  static final AudioService _instance =
-  AudioService._internal();
+  static final AudioService _instance = AudioService._internal();
 
   factory AudioService() => _instance;
 
   AudioService._internal() {
     _listenForCompletion();
+    _listenForPositionToSave(); // Added position listener
+    _restoreLastSong();
   }
 
   final AudioPlayer player = AudioPlayer();
@@ -22,15 +24,195 @@ class AudioService {
   static const String baseUrl =
       'https://jiosaavn-api-main-taupe.vercel.app';
 
-  final ValueNotifier<Song?> currentSong =
-  ValueNotifier<Song?>(null);
+  static const String _lastSongKey = 'ryvo_last_played_song';
+
+  final ValueNotifier<Song?> currentSong = ValueNotifier<Song?>(null);
 
   /// Songs that should play after the current song.
   final ValueNotifier<List<Song>> queue =
-  ValueNotifier<List<Song>>(<Song>[]);
+      ValueNotifier<List<Song>>(<Song>[]);
 
   bool _loadingNext = false;
   bool _completionHandled = false;
+  bool _restoringLastSong = false;
+  DateTime? _lastSaveTime;
+
+  // ============================================================
+  // LAST PLAYED SONG PERSISTENCE
+  // ============================================================
+
+  Future<void> _saveLastSong(Song song) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setString(
+        _lastSongKey,
+        jsonEncode({
+          'id': song.id,
+          'title': song.title,
+          'artist': song.artist,
+          'thumbnail': song.thumbnail,
+        }),
+      );
+
+      debugPrint(
+        'RYVO: Last song saved -> ${song.title}',
+      );
+    } catch (e) {
+      debugPrint(
+        'RYVO: Failed to save last song -> $e',
+      );
+    }
+  }
+
+  // Throttled position saving to prevent excessive SharedPreferences writes
+  void _listenForPositionToSave() {
+    player.positionStream.listen((position) async {
+      if (currentSong.value == null) return;
+
+      final now = DateTime.now();
+      // Throttle writes to every 5 seconds
+      if (_lastSaveTime == null || now.difference(_lastSaveTime!).inSeconds >= 5) {
+        _lastSaveTime = now;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('ryvo_last_position', position.inMilliseconds);
+          await prefs.setBool('ryvo_was_playing', player.playing);
+        } catch (e) {
+          debugPrint('RYVO: Failed to save position -> $e');
+        }
+      }
+    });
+  }
+
+  Future<void> _restoreLastSong() async {
+    if (_restoringLastSong) {
+      return;
+    }
+
+    _restoringLastSong = true;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final saved = prefs.getString(_lastSongKey);
+      if (saved == null || saved.trim().isEmpty) {
+        return;
+      }
+
+      final data = jsonDecode(saved);
+      if (data is! Map) {
+        return;
+      }
+
+      final id = data['id']?.toString().trim() ?? '';
+      if (id.isEmpty) {
+        return;
+      }
+
+      final song = Song(
+        id: id,
+        title: data['title']?.toString() ?? 'Unknown Song',
+        artist: data['artist']?.toString() ?? 'Unknown Artist',
+        thumbnail: data['thumbnail']?.toString() ?? '',
+      );
+
+      // Instantly assign to make the Mini Player visible on startup
+      currentSong.value = song;
+      
+      final savedPos = prefs.getInt('ryvo_last_position') ?? 0;
+      final wasPlaying = prefs.getBool('ryvo_was_playing') ?? false;
+
+      debugPrint('RYVO: Restored last song UI -> ${song.title}');
+
+      // Silently re-resolve the audio URL in the background
+      final response = await http.get(Uri.parse('$baseUrl/api/songs/${song.id}'));
+
+      if (response.statusCode != 200) return;
+
+      final json = jsonDecode(response.body);
+      if (json['success'] != true) return;
+
+      final List songs = json['data'] ?? [];
+      if (songs.isEmpty) return;
+
+      final songData = songs.first;
+      final List urls = songData['downloadUrl'] ?? [];
+      if (urls.isEmpty) return;
+
+      String audioUrl = '';
+
+      for (final item in urls) {
+        if (item is Map && item['quality'] == '320kbps') {
+          audioUrl = item['url']?.toString() ?? '';
+          break;
+        }
+      }
+
+      if (audioUrl.isEmpty) {
+        final last = urls.last;
+        if (last is Map) {
+          audioUrl = last['url']?.toString() ?? '';
+        }
+      }
+
+      if (audioUrl.isEmpty) return;
+
+      Uri? artUri;
+      if (song.thumbnail.trim().isNotEmpty) {
+        final parsed = Uri.tryParse(song.thumbnail);
+        if (parsed != null && parsed.hasScheme) {
+          artUri = parsed;
+        }
+      }
+
+      final mediaItem = MediaItem(
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        artUri: artUri,
+      );
+
+      // Restore the AudioSource and seek to position, but explicitly DO NOT PLAY.
+      await player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(audioUrl),
+          tag: mediaItem,
+        ),
+        initialPosition: Duration(milliseconds: savedPos),
+      );
+
+      debugPrint(
+        'RYVO: Fully restored audio source at ${savedPos}ms (Was playing: $wasPlaying). Kept paused.',
+      );
+    } catch (e) {
+      debugPrint(
+        'RYVO: Failed to fully restore last song audio -> $e',
+      );
+    } finally {
+      _restoringLastSong = false;
+    }
+  }
+
+  Future<void> clearLastSong() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.remove(_lastSongKey);
+      await prefs.remove('ryvo_last_position');
+      await prefs.remove('ryvo_was_playing');
+
+      currentSong.value = null;
+
+      debugPrint(
+        'RYVO: Last song cleared',
+      );
+    } catch (e) {
+      debugPrint(
+        'RYVO: Failed to clear last song -> $e',
+      );
+    }
+  }
 
   // ============================================================
   // BACKGROUND AUTO NEXT
@@ -38,7 +220,7 @@ class AudioService {
 
   void _listenForCompletion() {
     player.processingStateStream.listen(
-          (state) async {
+      (state) async {
         if (state != ProcessingState.completed) {
           _completionHandled = false;
           return;
@@ -79,12 +261,12 @@ class AudioService {
   // ============================================================
 
   Future<void> playSong(
-      String songId, {
-        String title = 'RYVO',
-        String artist = 'Unknown Artist',
-        String image = '',
-        bool clearQueue = false,
-      }) async {
+    String songId, {
+    String title = 'RYVO',
+    String artist = 'Unknown Artist',
+    String image = '',
+    bool clearQueue = false,
+  }) async {
     try {
       debugPrint('========== RYVO ==========');
       debugPrint('Song ID: $songId');
@@ -95,12 +277,8 @@ class AudioService {
 
       final song = Song(
         id: songId,
-        title: title.trim().isEmpty
-            ? 'Unknown Song'
-            : title,
-        artist: artist.trim().isEmpty
-            ? 'Unknown Artist'
-            : artist,
+        title: title.trim().isEmpty ? 'Unknown Song' : title,
+        artist: artist.trim().isEmpty ? 'Unknown Artist' : artist,
         thumbnail: image,
       );
 
@@ -115,9 +293,7 @@ class AudioService {
     }
   }
 
-  Future<void> _playSong(
-      Song song,
-      ) async {
+  Future<void> _playSong(Song song) async {
     final response = await http.get(
       Uri.parse(
         '$baseUrl/api/songs/${song.id}',
@@ -130,9 +306,7 @@ class AudioService {
       );
     }
 
-    final json = jsonDecode(
-      response.body,
-    );
+    final json = jsonDecode(response.body);
 
     if (json['success'] != true) {
       throw Exception(
@@ -140,8 +314,7 @@ class AudioService {
       );
     }
 
-    final List songs =
-        json['data'] ?? [];
+    final List songs = json['data'] ?? [];
 
     if (songs.isEmpty) {
       throw Exception(
@@ -151,8 +324,7 @@ class AudioService {
 
     final songData = songs.first;
 
-    final List urls =
-        songData['downloadUrl'] ?? [];
+    final List urls = songData['downloadUrl'] ?? [];
 
     if (urls.isEmpty) {
       throw Exception(
@@ -166,8 +338,7 @@ class AudioService {
     for (final item in urls) {
       if (item is Map &&
           item['quality'] == '320kbps') {
-        audioUrl =
-            item['url']?.toString() ?? '';
+        audioUrl = item['url']?.toString() ?? '';
         break;
       }
     }
@@ -177,8 +348,7 @@ class AudioService {
       final last = urls.last;
 
       if (last is Map) {
-        audioUrl =
-            last['url']?.toString() ?? '';
+        audioUrl = last['url']?.toString() ?? '';
       }
     }
 
@@ -188,19 +358,22 @@ class AudioService {
       );
     }
 
+    // Update current song immediately.
     currentSong.value = song;
 
-    await LibraryService.instance
-        .addRecentlyPlayed(song);
+    // IMPORTANT:
+    // Save the song so the mini-player can restore it
+    // after the app is completely closed and reopened.
+    await _saveLastSong(song);
+
+    await LibraryService.instance.addRecentlyPlayed(song);
 
     Uri? artUri;
 
     if (song.thumbnail.trim().isNotEmpty) {
-      final parsed =
-      Uri.tryParse(song.thumbnail);
+      final parsed = Uri.tryParse(song.thumbnail);
 
-      if (parsed != null &&
-          parsed.hasScheme) {
+      if (parsed != null && parsed.hasScheme) {
         artUri = parsed;
       }
     }
@@ -232,47 +405,37 @@ class AudioService {
   // PLAYBACK QUEUE
   // ============================================================
 
-  /// Replaces the queue with songs that should follow
-  /// the currently playing song.
-  ///
-  /// This is used when opening a playlist/search result.
   void setPlaybackQueue(
-      List<Song> songs, {
-        int currentIndex = 0,
-      }) {
+    List<Song> songs, {
+    int currentIndex = 0,
+  }) {
     if (songs.isEmpty) {
       queue.value = <Song>[];
       return;
     }
 
-    final safeIndex =
-    currentIndex.clamp(
+    final safeIndex = currentIndex.clamp(
       0,
       songs.length - 1,
     );
 
-    final remaining =
-    songs
+    final remaining = songs
         .skip(safeIndex + 1)
         .toList();
 
-    queue.value =
-    List<Song>.from(remaining);
+    queue.value = List<Song>.from(remaining);
 
     debugPrint(
       'RYVO: Playback queue set '
-          '(${queue.value.length} songs)',
+      '(${queue.value.length} songs)',
     );
   }
 
-  void addToQueue(
-      Song song,
-      ) {
-    final updated =
-    List<Song>.from(queue.value);
+  void addToQueue(Song song) {
+    final updated = List<Song>.from(queue.value);
 
     final exists = updated.any(
-          (item) => item.id == song.id,
+      (item) => item.id == song.id,
     );
 
     if (exists) {
@@ -291,18 +454,15 @@ class AudioService {
     );
   }
 
-  void addToQueueNext(
-      Song song,
-      ) {
+  void addToQueueNext(Song song) {
     if (currentSong.value?.id == song.id) {
       return;
     }
 
-    final updated =
-    List<Song>.from(queue.value);
+    final updated = List<Song>.from(queue.value);
 
     updated.removeWhere(
-          (item) => item.id == song.id,
+      (item) => item.id == song.id,
     );
 
     updated.insert(
@@ -317,22 +477,18 @@ class AudioService {
     );
   }
 
-  void removeFromQueue(
-      Song song,
-      ) {
-    final updated =
-    List<Song>.from(queue.value);
+  void removeFromQueue(Song song) {
+    final updated = List<Song>.from(queue.value);
 
     updated.removeWhere(
-          (item) => item.id == song.id,
+      (item) => item.id == song.id,
     );
 
     queue.value = updated;
   }
 
   void clearQueueItems() {
-    queue.value =
-    <Song>[];
+    queue.value = <Song>[];
   }
 
   // ============================================================
@@ -354,11 +510,9 @@ class AudioService {
     _loadingNext = true;
 
     try {
-      final nextSong =
-          queue.value.first;
+      final nextSong = queue.value.first;
 
-      final remaining =
-      List<Song>.from(queue.value);
+      final remaining = List<Song>.from(queue.value);
 
       remaining.removeAt(0);
 
@@ -388,6 +542,16 @@ class AudioService {
   }
 
   Future<void> resume() async {
+    // If the app was reopened but the URL fetch failed or hasn't finished,
+    // audioSource will be null. Fall back to reloading the song entirely.
+    if (player.audioSource == null &&
+        currentSong.value != null) {
+      await _playSong(currentSong.value!);
+      return;
+    }
+
+    // Because _restoreLastSong set the initialPosition successfully,
+    // this will perfectly resume from where the user left off.
     await player.play();
   }
 
@@ -395,9 +559,7 @@ class AudioService {
     await player.stop();
   }
 
-  Future<void> seek(
-      Duration position,
-      ) async {
+  Future<void> seek(Duration position) async {
     await player.seek(position);
   }
 
@@ -411,8 +573,7 @@ class AudioService {
   Stream<Duration?> get durationStream =>
       player.durationStream;
 
-  Stream<PlayerState>
-  get playerStateStream =>
+  Stream<PlayerState> get playerStateStream =>
       player.playerStateStream;
 
   Duration get currentPosition =>
