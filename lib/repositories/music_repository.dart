@@ -94,13 +94,52 @@ class MusicRepository {
   // ============================================================
 
   Future<List<Song>> search(String query, {int pages = 1}) async {
+    final value = query.trim();
+    if (value.isEmpty) return [];
+
     final safePages = pages.clamp(1, 5);
+
+    try {
+      final artists = await artistSuggestions(value);
+      final normalizedQuery = _normaliseArtistName(value);
+      final exactArtist = artists.where(
+        (artist) => _normaliseArtistName(artist.name) == normalizedQuery,
+      );
+
+      final artist = exactArtist.isNotEmpty ? exactArtist.first : null;
+      if (artist != null && artist.id.trim().isNotEmpty) {
+        final requests = <Future<ArtistSongsPage>>[];
+        for (int page = 0; page < safePages; page++) {
+          requests.add(getArtistSongsPage(artist.id, page: page));
+        }
+
+        final pagesResult = await Future.wait(requests);
+        final songs = <Song>[];
+        final ids = <String>{};
+        final titles = <String>{};
+
+        for (final result in pagesResult) {
+          for (final song in result.songs) {
+            if (song.id.trim().isEmpty || !ids.add(song.id)) continue;
+
+            final title = _normaliseTitle(song.title);
+            if (title.isNotEmpty && !titles.add(title)) continue;
+
+            songs.add(song);
+          }
+        }
+
+        return songs;
+      }
+    } catch (_) {
+      // Fall through to normal song search if artist resolution fails.
+    }
 
     final requests = <Future<List<dynamic>>>[];
 
     for (int page = 0; page < safePages; page++) {
       requests.add(
-        _service.searchSongs(query, page: page, limit: _apiPageLimit),
+        _service.searchSongs(value, page: page, limit: _apiPageLimit),
       );
     }
 
@@ -263,25 +302,6 @@ class MusicRepository {
 
   // ============================================================
   // ARTIST SONGS
-  //
-  // API RESPONSE:
-  //
-  // {
-  //   "success": true,
-  //   "data": {
-  //     "total": 4621,
-  //     "songs": [...]
-  //   }
-  // }
-  //
-  // IMPORTANT:
-  // This method expects ARTIST ID, not artist name.
-  //
-  // Example:
-  // artistId = "456857"
-  //
-  // Endpoint:
-  // /api/artists/456857/songs
   // ============================================================
 
   Future<ArtistSongsPage> getArtistSongsPage(
@@ -303,7 +323,6 @@ class MusicRepository {
 
     if (data is! Map) return const ArtistSongsPage(songs: [], total: null);
 
-    // _get() unwraps the API envelope, so deployed data is { total, songs }.
     final rawSongs = data['songs'];
     final total = int.tryParse(data['total']?.toString() ?? '');
     final uniqueIds = <String>{};
@@ -425,6 +444,8 @@ class MusicRepository {
         sectionName: 'Charts',
       );
 
+      final personalized = await _getPersonalizedSongs();
+
       List<SearchPlaylistResult> parsePlaylists(dynamic value) {
         if (value is! List) return [];
         return value
@@ -468,6 +489,8 @@ class MusicRepository {
 
       return <String, dynamic>{
         'sections': <String, List<Song>>{
+          if (personalized.isNotEmpty)
+            'Made For You': personalized,
           'Newly Released': newlyReleased,
           'Trending': trending,
           'Charts': charts,
@@ -484,6 +507,95 @@ class MusicRepository {
   }
 
   // ============================================================
+  // PERSONALIZED SONGS LOGIC UPDATED
+  // ============================================================
+  
+  Future<List<Song>> _getPersonalizedSongs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final genres =
+          prefs.getStringList('ryvo_preferred_genres') ?? <String>[];
+      final artistIds =
+          prefs.getStringList('ryvo_preferred_artist_ids') ?? <String>[];
+
+      debugPrint('RYVO PERSONALIZED: saved artist IDs = ${artistIds.length}');
+      debugPrint('RYVO PERSONALIZED: saved genre preferences = ${genres.length}');
+
+      if (genres.isEmpty && artistIds.isEmpty) {
+        return <Song>[];
+      }
+
+      final candidates = <Song>[];
+      final ids = <String>{};
+
+      // 1. Fetch multiple pages of songs for each saved Artist ID directly
+      for (final artistId in artistIds.take(5)) {
+        try {
+          if (artistId.trim().isEmpty) continue;
+
+          // Fetch up to 3 pages per artist for a deep candidate pool
+          for (int page = 0; page < 3; page++) {
+            final result = await getArtistSongsPage(
+              artistId,
+              page: page,
+            );
+
+            // If the artist doesn't have any more pages, break early
+            if (result.songs.isEmpty) {
+              break;
+            }
+
+            for (final song in result.songs) {
+              final id = song.id.trim();
+              if (id.isNotEmpty && ids.add(id)) {
+                candidates.add(song);
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('RYVO PERSONALIZED ARTIST ERROR: $e');
+        }
+      }
+
+      // 2. Fetch from preferred Genres to supplement the pool
+      for (final genre in genres.take(4)) {
+        try {
+          final result = await search(genre, pages: 1);
+          for (final song in result) {
+            final id = song.id.trim();
+            if (id.isNotEmpty && ids.add(id)) {
+              candidates.add(song);
+            }
+          }
+        } catch (e) {
+          debugPrint('RYVO PERSONALIZED GENRE ERROR: $e');
+        }
+      }
+
+      debugPrint('RYVO PERSONALIZED: candidate songs = ${candidates.length}');
+
+      if (candidates.isEmpty) {
+        return <Song>[];
+      }
+
+      // 3. Use existing home history logic to randomize, deduplicate from past plays,
+      //    and select up to 8 songs. _selectFreshSongs naturally enforces a limit of 
+      //    2 songs per artist, ensuring genres also surface.
+      final finalSongs = await _selectFreshSongs(
+        sectionName: 'Made For You',
+        candidates: candidates,
+      );
+
+      debugPrint('RYVO PERSONALIZED: final Made For You songs = ${finalSongs.length}');
+
+      return finalSongs;
+    } catch (e) {
+      debugPrint('RYVO PERSONALIZED ERROR: $e');
+      return <Song>[];
+    }
+  }
+
   // HOME - RESOLVE ALBUM/CARD OBJECTS TO REAL SONGS
   // ============================================================
 
@@ -565,14 +677,6 @@ class MusicRepository {
         break;
       }
     }
-
-    // IMPORTANT:
-    // Do NOT search an album title as a fallback here. That was the
-    // cause of repeated artwork: a title search can return several
-    // songs from the same compilation/album and all of them can share
-    // the same artwork. If the Home API gives an album but the album
-    // endpoint fails, leave that item unresolved instead of inventing
-    // unrelated songs.
 
     return _uniqueSongs(output).take(_songsPerSection).toList();
   }
@@ -1036,6 +1140,13 @@ class MusicRepository {
 
   bool _containsSong(List<Song> songs, Song target) {
     return songs.any((song) => song.id == target.id);
+  }
+
+  String _normaliseArtistName(String name) {
+    return name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
   }
 
   String _artistKey(String artist) {

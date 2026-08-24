@@ -1,5 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music_app/features/onboarding/music_preferences_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:music_app/features/home/home_screen.dart';
@@ -61,14 +63,41 @@ class WelcomeScreen extends StatelessWidget {
     }
   }
 
-  void _goToHome(BuildContext context) {
+  Future<void> _goToHome(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final completed =
+        prefs.getBool('ryvo_music_preferences_completed') ?? false;
+
+    if (!context.mounted) return;
+
+    if (!completed) {
+      final result = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const MusicPreferencesScreen(),
+        ),
+      );
+
+      if (!context.mounted) return;
+
+      if (result == true) {
+        _openHome(context);
+      }
+
+      return;
+    }
+
+    _openHome(context);
+  }
+
+  void _openHome(BuildContext context) {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 500),
         reverseTransitionDuration: const Duration(milliseconds: 350),
         pageBuilder: (context, animation, secondaryAnimation) =>
             const HomeScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) {
           final curve = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutCubic,
@@ -249,4 +278,5 @@ class WelcomeScreen extends StatelessWidget {
       ),
     );
   }
-}
+}
+
