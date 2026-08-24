@@ -658,124 +658,127 @@ parent: AlwaysScrollableScrollPhysics(),
 ),
 slivers: [
 // Top Header & Greeting
-SliverToBoxAdapter(
-child: SafeArea(
-bottom: false,
-child: Padding(
-padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-// Greeting Row with Account Avatar
-Row(
-mainAxisAlignment: MainAxisAlignment.spaceBetween,
-children: [
-Text(
-_getGreeting(),
-style: GoogleFonts.plusJakartaSans(
-color: SpotifyColors.textPrimary,
-fontSize: 24,
-fontWeight: FontWeight.w800,
-letterSpacing: -0.5,
-),
-),
-Row(
-children: [
-IconButton(
-splashRadius: 22,
-icon: const Icon(
-Icons.bolt_rounded,
-color: SpotifyColors.textPrimary,
-size: 24,
-),
-onPressed: () {
-_loadHomeData(showLoader: false);
-},
-),
-const SizedBox(width: 4),
-GestureDetector(
-onTap: () {
-Navigator.push(
-context,
-MaterialPageRoute(
-builder: (_) => const AccountScreen(),
-),
-);
-},
-child: Container(
-width: 34,
-height: 34,
-decoration: BoxDecoration(
-color: SpotifyColors.surfaceElevated,
-shape: BoxShape.circle,
-border: Border.all(
-color: currentTheme.primary.withValues(alpha: 0.5),
-width: 1.5,
-),
-),
-child: const Icon(
-Icons.person_rounded,
-color: SpotifyColors.textPrimary,
-size: 20,
-),
-),
-),
-],
-),
-],
-),
+SliverPersistentHeader(
+  pinned: true,
+  delegate: _PinnedHomeHeaderDelegate(
+    minHeight: 190,
+    maxHeight: 190,
+    child: SafeArea(
+      bottom: false,
+      child: Container(
+        color: SpotifyColors.background,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _getGreeting(),
+                  style: GoogleFonts.plusJakartaSans(
+                    color: SpotifyColors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      splashRadius: 22,
+                      icon: const Icon(
+                        Icons.bolt_rounded,
+                        color: SpotifyColors.textPrimary,
+                        size: 24,
+                      ),
+                      onPressed: () {
+                        _loadHomeData(showLoader: false);
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AccountScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: SpotifyColors.surfaceElevated,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: currentTheme.primary.withValues(alpha: 0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.person_rounded,
+                          color: SpotifyColors.textPrimary,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _filters.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final isSelected = _selectedFilterIndex == index;
 
-const SizedBox(height: 14),
-
-// Filter Chips (Spotify Pills)
-SizedBox(
-height: 32,
-child: ListView.separated(
-scrollDirection: Axis.horizontal,
-itemCount: _filters.length,
-separatorBuilder: (_, __) => const SizedBox(width: 8),
-itemBuilder: (context, index) {
-final isSelected = _selectedFilterIndex == index;
-return GestureDetector(
-onTap: () {
-HapticFeedback.selectionClick();
-setState(() {
-_selectedFilterIndex = index;
-});
-},
-child: AnimatedContainer(
-duration: const Duration(milliseconds: 200),
-padding: const EdgeInsets.symmetric(
-horizontal: 16,
-vertical: 6,
-),
-decoration: BoxDecoration(
-color: isSelected
-? currentTheme.primary
-    : SpotifyColors.surfaceElevated,
-borderRadius: BorderRadius.circular(20),
-),
-child: Text(
-_filters[index],
-style: GoogleFonts.plusJakartaSans(
-color: isSelected
-? Colors.black
-    : SpotifyColors.textPrimary,
-fontSize: 12,
-fontWeight: isSelected
-? FontWeight.w700
-    : FontWeight.w500,
-),
-),
-),
-);
-},
-),
-),
-],
-),
-),
-),
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedFilterIndex = index;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? currentTheme.primary
+                            : SpotifyColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _filters[index],
+                        style: GoogleFonts.plusJakartaSans(
+                          color: isSelected
+                              ? Colors.black
+                              : SpotifyColors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
 ),
 
 // Loading Indicator or Error
@@ -1643,3 +1646,44 @@ const SizedBox(height: 16),
 
 
 
+
+
+class _PinnedHomeHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double minHeight;
+  final double maxHeight;
+  final Widget child;
+
+  const _PinnedHomeHeaderDelegate({
+    required this.minHeight,
+    required this.maxHeight,
+    required this.child,
+  });
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  double get maxExtent => maxHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Material(
+      color: SpotifyColors.background,
+      elevation: overlapsContent ? 2 : 0,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(
+    covariant _PinnedHomeHeaderDelegate oldDelegate,
+  ) {
+    return oldDelegate.minHeight != minHeight ||
+        oldDelegate.maxHeight != maxHeight ||
+        oldDelegate.child != child;
+  }
+}
