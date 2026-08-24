@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/app/theme_controller.dart';
 import 'package:music_app/features/welcome/welcome_screen.dart';
 import 'package:music_app/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -25,12 +26,231 @@ class _AccountScreenState extends State<AccountScreen> {
     return user.isAnonymous;
   }
 
+  Future<void> _confirmSignOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: SpotifyColors.surfaceElevated,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Log Out?',
+            style: GoogleFonts.plusJakartaSans(
+              color: SpotifyColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to log out?',
+            style: GoogleFonts.plusJakartaSans(
+              color: SpotifyColors.textSecondary,
+              fontSize: 15,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                  color: SpotifyColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SpotifyColors.green,
+                foregroundColor: Colors.black,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: Text(
+                'Log Out',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _signOut();
+    }
+  }
+
   Future<void> _signOut() async {
     await _auth.signOut();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       (route) => false,
+    );
+  }
+
+  void _showInfoDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: SpotifyColors.surfaceElevated,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            title,
+            style: GoogleFonts.plusJakartaSans(
+              color: SpotifyColors.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              content,
+              style: GoogleFonts.plusJakartaSans(
+                color: SpotifyColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Close',
+                style: GoogleFonts.plusJakartaSans(
+                  color: SpotifyColors.green,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw Exception('Could not launch $urlString');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open link.',
+            style: GoogleFonts.plusJakartaSans(color: Colors.white),
+          ),
+          backgroundColor: SpotifyColors.surfaceElevated,
+        ),
+      );
+    }
+  }
+
+  void _showContactBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: SpotifyColors.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Contact / Feedback',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: SpotifyColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Instagram',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '@biikkkuuuu',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textSecondary,
+                    ),
+                  ),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.pop(context);
+                    _launchURL('https://instagram.com/biikkkuuuu');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.telegram, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Telegram',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '@biikkkuuuuu',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textSecondary,
+                    ),
+                  ),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.pop(context);
+                    _launchURL('https://t.me/biikkkuuuuu');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.code_rounded, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'GitHub',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'biikkkuuuu/Ryvo',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textSecondary,
+                    ),
+                  ),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.pop(context);
+                    _launchURL('https://github.com/biikkkuuuu/Ryvo');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -74,7 +294,7 @@ class _AccountScreenState extends State<AccountScreen> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         children: [
-          // Profile Hero Card
+          // Profile Hero Card (CLEAN - NO BADGES)
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -114,23 +334,6 @@ class _AccountScreenState extends State<AccountScreen> {
                           fontSize: 13,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: currentTheme.primary.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          _isGuest ? 'GUEST' : 'FREE PLAN',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: currentTheme.primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -140,93 +343,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
           const SizedBox(height: 28),
 
-          // Section 1: Appearance & Accent Colors
-          Text(
-            'Theme Accent',
-            style: GoogleFonts.plusJakartaSans(
-              color: SpotifyColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: SpotifyColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: List.generate(RyvoThemeController.themes.length, (index) {
-                final theme = RyvoThemeController.themes[index];
-                final isSelected = currentThemeIndex == index;
-
-                return GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    RyvoThemeController.instance.setTheme(index);
-                    setState(() {});
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? theme.primary.withValues(alpha: 0.12)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.primary,
-                            border: Border.all(
-                              color: isSelected ? Colors.white : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                theme.name,
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: SpotifyColors.textPrimary,
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                theme.subtitle,
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: SpotifyColors.textSecondary,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (isSelected)
-                          Icon(Icons.check_circle_rounded, color: theme.primary, size: 20),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          // Section 2: Audio & Playback
+          // Section 1: Playback Settings
           Text(
             'Playback Settings',
             style: GoogleFonts.plusJakartaSans(
@@ -282,10 +399,143 @@ class _AccountScreenState extends State<AccountScreen> {
                     ),
                   ),
                   onTap: () {
+                    HapticFeedback.selectionClick();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Cache cleared successfully!')),
+                      SnackBar(
+                        content: Text(
+                          'Cache cleared successfully!',
+                          style: GoogleFonts.plusJakartaSans(color: Colors.white),
+                        ),
+                        backgroundColor: SpotifyColors.green.withValues(alpha: 0.8),
+                        duration: const Duration(seconds: 2),
+                      ),
                     );
                   },
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          // Section 2: About RYVO
+          Text(
+            'About RYVO',
+            style: GoogleFonts.plusJakartaSans(
+              color: SpotifyColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: SpotifyColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.music_note_rounded, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'RYVO — Music Reimagined',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    _showInfoDialog(
+                      'RYVO',
+                      'Music Reimagined. Built to provide a premium, uninterrupted ad-free music listening experience.',
+                    );
+                  },
+                ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.info_outline_rounded, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Version 1.0.0',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Terms & Conditions',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SpotifyColors.textSecondary),
+                  onTap: () {
+                    _showInfoDialog(
+                      'Terms & Conditions',
+                      'By using RYVO, you agree to our standard terms of service. This app is for personal, non-commercial use only. Audio content is provided via third-party APIs.',
+                    );
+                  },
+                ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Privacy Policy',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SpotifyColors.textSecondary),
+                  onTap: () {
+                    _showInfoDialog(
+                      'Privacy Policy',
+                      'RYVO values your privacy. We do not sell your personal data. Firebase Authentication is used solely for syncing your library and preferences securely.',
+                    );
+                  },
+                ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.code_rounded, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Open Source Licenses',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SpotifyColors.textSecondary),
+                  onTap: () {
+                    showLicensePage(
+                      context: context,
+                      applicationName: 'RYVO',
+                      applicationVersion: '1.0.0',
+                    );
+                  },
+                ),
+                const Divider(color: Colors.white10, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.mail_outline_rounded, color: SpotifyColors.textPrimary),
+                  title: Text(
+                    'Contact / Feedback',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: SpotifyColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SpotifyColors.textSecondary),
+                  onTap: _showContactBottomSheet, // Calls the newly built bottom sheet
                 ),
               ],
             ),
@@ -298,7 +548,7 @@ class _AccountScreenState extends State<AccountScreen> {
             width: double.infinity,
             height: 48,
             child: OutlinedButton(
-              onPressed: _signOut,
+              onPressed: _confirmSignOut,
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.white24),
                 shape: RoundedRectangleBorder(
@@ -316,14 +566,16 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 40),
 
           Center(
             child: Text(
-              'RYVO Music • Version 1.0.0',
+              'BUILT BY RANA',
               style: GoogleFonts.plusJakartaSans(
                 color: SpotifyColors.textMuted,
                 fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2.0,
               ),
             ),
           ),
