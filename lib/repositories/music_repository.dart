@@ -229,6 +229,67 @@ class MusicRepository {
   }
 
   // ============================================================
+  // CONTEXT-AWARE RECOMMENDATIONS (UP NEXT / SIMILAR SONGS)
+  // ============================================================
+
+  Future<List<Song>> getSongRecommendations(Song currentSong, {List<String> excludeIds = const []}) async {
+    final artistName = currentSong.artist.trim();
+    
+    // Fallback directly to title if artist is utterly unknown
+    if (artistName.isEmpty || artistName.toLowerCase() == 'unknown' || artistName.toLowerCase() == 'unknown artist') {
+      final fallback = await songSuggestions(currentSong.title);
+      return fallback.where((s) => s.id != currentSong.id && !excludeIds.contains(s.id)).toList();
+    }
+
+    try {
+      // 1. Resolve strongest signal: The Artist ID
+      final artists = await artistSuggestions(artistName);
+      final normalizedQuery = _normaliseArtistName(artistName);
+      
+      final exactArtist = artists.where(
+        (artist) => _normaliseArtistName(artist.name) == normalizedQuery,
+      ).firstOrNull ?? (artists.isNotEmpty ? artists.first : null);
+
+      List<Song> candidates = [];
+
+      // 2. Fetch context-relevant songs
+      if (exactArtist != null) {
+        final artistSongs = await getArtistSongsPage(exactArtist.id, page: 0);
+        candidates = artistSongs.songs;
+      } else {
+        candidates = await search(artistName, pages: 1);
+      }
+
+      // 3. Strict Deduplication
+      final filtered = <Song>[];
+      final uniqueIds = <String>{currentSong.id, ...excludeIds};
+
+      for (final song in candidates) {
+        if (uniqueIds.add(song.id)) {
+          filtered.add(song);
+        }
+      }
+
+      // 4. Fill gaps with title-based semantic matching if artist pool is too small
+      if (filtered.length < 5) {
+        final extra = await songSuggestions(currentSong.title);
+        for (final song in extra) {
+            if (uniqueIds.add(song.id)) {
+              filtered.add(song);
+            }
+        }
+      }
+
+      // 5. Shuffle to prevent repetitive predictability, return top 15
+      filtered.shuffle(_random);
+      return filtered.take(15).toList();
+    } catch (e) {
+      debugPrint('RYVO RECOMMENDATION ERROR: $e');
+      return [];
+    }
+  }
+
+  // ============================================================
   // ARTIST SUGGESTIONS
   // ============================================================
 
@@ -483,10 +544,6 @@ class MusicRepository {
             .toList();
       }
 
-      debugPrint('RYVO HOME BUNDLE: Newly Released = ${newlyReleased.length}');
-      debugPrint('RYVO HOME BUNDLE: Trending = ${trending.length}');
-      debugPrint('RYVO HOME BUNDLE: Charts = ${charts.length}');
-
       return <String, dynamic>{
         'sections': <String, List<Song>>{
           if (personalized.isNotEmpty)
@@ -519,9 +576,6 @@ class MusicRepository {
       final artistIds =
           prefs.getStringList('ryvo_preferred_artist_ids') ?? <String>[];
 
-      debugPrint('RYVO PERSONALIZED: saved artist IDs = ${artistIds.length}');
-      debugPrint('RYVO PERSONALIZED: saved genre preferences = ${genres.length}');
-
       if (genres.isEmpty && artistIds.isEmpty) {
         return <Song>[];
       }
@@ -529,19 +583,16 @@ class MusicRepository {
       final candidates = <Song>[];
       final ids = <String>{};
 
-      // 1. Fetch multiple pages of songs for each saved Artist ID directly
       for (final artistId in artistIds.take(5)) {
         try {
           if (artistId.trim().isEmpty) continue;
 
-          // Fetch up to 3 pages per artist for a deep candidate pool
           for (int page = 0; page < 3; page++) {
             final result = await getArtistSongsPage(
               artistId,
               page: page,
             );
 
-            // If the artist doesn't have any more pages, break early
             if (result.songs.isEmpty) {
               break;
             }
@@ -558,7 +609,6 @@ class MusicRepository {
         }
       }
 
-      // 2. Fetch from preferred Genres to supplement the pool
       for (final genre in genres.take(4)) {
         try {
           final result = await search(genre, pages: 1);
@@ -573,21 +623,14 @@ class MusicRepository {
         }
       }
 
-      debugPrint('RYVO PERSONALIZED: candidate songs = ${candidates.length}');
-
       if (candidates.isEmpty) {
         return <Song>[];
       }
 
-      // 3. Use existing home history logic to randomize, deduplicate from past plays,
-      //    and select up to 8 songs. _selectFreshSongs naturally enforces a limit of 
-      //    2 songs per artist, ensuring genres also surface.
       final finalSongs = await _selectFreshSongs(
         sectionName: 'Made For You',
         candidates: candidates,
       );
-
-      debugPrint('RYVO PERSONALIZED: final Made For You songs = ${finalSongs.length}');
 
       return finalSongs;
     } catch (e) {
@@ -621,9 +664,6 @@ class MusicRepository {
     for (final item in value.whereType<Map>()) {
       final type = item['type']?.toString().trim().toLowerCase() ?? '';
 
-      // ----------------------------------------------------------
-      // REAL SONG OBJECT
-      // ----------------------------------------------------------
       if (type == 'song') {
         addSongs(_convertToSongs([item]));
 
@@ -634,11 +674,6 @@ class MusicRepository {
         continue;
       }
 
-      // ----------------------------------------------------------
-      // HOME CHART/TRENDING ITEMS ARE OFTEN ALBUMS.
-      // Fetch the actual album by its ID so we get its real song
-      // objects and each song's own artwork.
-      // ----------------------------------------------------------
       final albumId = item['id']?.toString().trim() ?? '';
 
       if (albumId.isNotEmpty &&
@@ -654,9 +689,6 @@ class MusicRepository {
 
           if (albumData is Map) {
             rawSongs = albumData['songs'];
-
-            // Be defensive if the backend ever returns the older
-            // Saavn-style album payload with `list` instead.
             if (rawSongs is! List) {
               rawSongs = albumData['list'];
             }
@@ -679,62 +711,6 @@ class MusicRepository {
     }
 
     return _uniqueSongs(output).take(_songsPerSection).toList();
-  }
-
-  // ============================================================
-  // HOME CANDIDATES
-  // ============================================================
-
-  Future<List<Song>> _fetchCandidates(List<String> queries) async {
-    final shuffledQueries = List<String>.from(queries)..shuffle(_random);
-
-    final requests = <Future<List<dynamic>>>[];
-
-    for (final query in shuffledQueries) {
-      for (int page = 0; page < _pagesPerQuery; page++) {
-        requests.add(
-          _service.searchSongs(query, page: page, limit: _apiPageLimit),
-        );
-      }
-    }
-
-    final responses = await Future.wait(
-      requests.map((request) async {
-        try {
-          return await request;
-        } catch (_) {
-          return <dynamic>[];
-        }
-      }),
-    );
-
-    final candidates = <Song>[];
-    final ids = <String>{};
-    final titles = <String>{};
-
-    for (final raw in responses) {
-      for (final song in _convertToSongs(raw)) {
-        if (song.id.isEmpty) {
-          continue;
-        }
-
-        final title = _normaliseTitle(song.title);
-
-        if (!ids.add(song.id)) {
-          continue;
-        }
-
-        if (title.isNotEmpty && !titles.add(title)) {
-          continue;
-        }
-
-        candidates.add(song);
-      }
-    }
-
-    candidates.shuffle(_random);
-
-    return candidates;
   }
 
   // ============================================================
