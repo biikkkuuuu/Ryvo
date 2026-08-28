@@ -98,39 +98,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
             decoration: InputDecoration(
               hintText: 'My Playlist #1',
               hintStyle: const TextStyle(color: SpotifyColors.textMuted),
-              enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
-              ),
-              focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: SpotifyColors.green),
-              ),
+              enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: SpotifyColors.green)),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                  color: SpotifyColors.textSecondary,
-                ),
-              ),
+              child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, playlistName.trim()),
               style: ElevatedButton.styleFrom(
                 backgroundColor: SpotifyColors.green,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
-              child: Text(
-                'Create',
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              child: Text('Create', style: GoogleFonts.plusJakartaSans(color: Colors.black, fontWeight: FontWeight.w700)),
             ),
           ],
         );
@@ -143,10 +126,35 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  void _confirmDeletePlaylist(String playlistName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: SpotifyColors.surfaceElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Delete Playlist', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete "$playlistName"? This action cannot be undone.', style: GoogleFonts.plusJakartaSans(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await LibraryService.instance.deletePlaylist(playlistName);
+              _loadLibrary(); // Instantly update UI
+            },
+            child: Text('Delete', style: GoogleFonts.plusJakartaSans(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final currentTheme = RyvoThemeController.themes[
-        RyvoThemeController.instance.selectedTheme];
+    final currentTheme = RyvoThemeController.themes[RyvoThemeController.instance.selectedTheme];
 
     return Scaffold(
       backgroundColor: SpotifyColors.background,
@@ -162,49 +170,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 children: [
                   GestureDetector(
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AccountScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountScreen()));
                     },
                     child: Container(
-                      width: 34,
-                      height: 34,
+                      width: 34, height: 34,
                       decoration: BoxDecoration(
                         color: SpotifyColors.surfaceElevated,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: currentTheme.primary.withValues(alpha: 0.5),
-                          width: 1.5,
-                        ),
+                        border: Border.all(color: currentTheme.primary.withValues(alpha: 0.5), width: 1.5),
                       ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        color: SpotifyColors.textPrimary,
-                        size: 20,
-                      ),
+                      child: const Icon(Icons.person_rounded, color: SpotifyColors.textPrimary, size: 20),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'Your Library',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: SpotifyColors.textPrimary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
+                    style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5),
                   ),
                   const Spacer(),
                   IconButton(
                     splashRadius: 22,
-                    icon: const Icon(
-                      Icons.add_rounded,
-                      color: SpotifyColors.textPrimary,
-                      size: 28,
-                    ),
+                    icon: const Icon(Icons.add_rounded, color: SpotifyColors.textPrimary, size: 28),
                     onPressed: _createNewPlaylist,
                   ),
                 ],
@@ -224,16 +210,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   return GestureDetector(
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      setState(() {
-                        _selectedFilterIndex = index;
-                      });
+                      setState(() { _selectedFilterIndex = index; });
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? currentTheme.primary
-                            : SpotifyColors.surfaceElevated,
+                        color: isSelected ? currentTheme.primary : SpotifyColors.surfaceElevated,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -255,101 +237,48 @@ class _LibraryScreenState extends State<LibraryScreen> {
             // Library List Content
             Expanded(
               child: _loading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: currentTheme.primary,
-                      ),
-                    )
+                  ? Center(child: CircularProgressIndicator(color: currentTheme.primary))
                   : ListView(
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
                         // Pinned: Liked Songs Card
-                        if (_selectedFilterIndex == 0 ||
-                            _selectedFilterIndex == 2)
+                        if (_selectedFilterIndex == 0 || _selectedFilterIndex == 2)
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(vertical: 4),
                             leading: Container(
-                              width: 54,
-                              height: 54,
+                              width: 54, height: 54,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF450AF5), Color(0xFFC4EFD9)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                gradient: const LinearGradient(colors: [Color(0xFF450AF5), Color(0xFFC4EFD9)], begin: Alignment.topLeft, end: Alignment.bottomRight),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Icon(
-                                Icons.favorite_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
+                              child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 26),
                             ),
-                            title: Text(
-                              'Liked Songs',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: SpotifyColors.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Playlist • ${_likedSongs.length} songs',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: SpotifyColors.textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
+                            title: Text('Liked Songs', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                            subtitle: Text('Playlist • ${_likedSongs.length} songs', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
                             onTap: _openLikedSongs,
                           ),
 
                         // Pinned: Recently Played Card
-                        if (_selectedFilterIndex == 0 ||
-                            _selectedFilterIndex == 3)
+                        if (_selectedFilterIndex == 0 || _selectedFilterIndex == 3)
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(vertical: 4),
                             leading: Container(
-                              width: 54,
-                              height: 54,
+                              width: 54, height: 54,
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    currentTheme.primaryDark,
-                                    currentTheme.primary,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                gradient: LinearGradient(colors: [currentTheme.primaryDark, currentTheme.primary], begin: Alignment.topLeft, end: Alignment.bottomRight),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Icon(
-                                Icons.history_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
+                              child: const Icon(Icons.history_rounded, color: Colors.white, size: 26),
                             ),
-                            title: Text(
-                              'Recently Played',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: SpotifyColors.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Playlist • ${_recentlyPlayed.length} songs',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: SpotifyColors.textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
+                            title: Text('Recently Played', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                            // FIX: Removed hardcoded length to fix the "20" issue
+                            subtitle: Text('History', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
                             onTap: _openRecentlyPlayed,
                           ),
 
                         // Custom User Playlists
-                        if (_selectedFilterIndex == 0 ||
-                            _selectedFilterIndex == 1)
+                        if (_selectedFilterIndex == 0 || _selectedFilterIndex == 1)
                           ..._playlistNames.map((name) {
                             return FutureBuilder<List<Song>>(
                               future: LibraryService.instance.getPlaylistSongs(name),
@@ -358,32 +287,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 return ListTile(
                                   contentPadding: const EdgeInsets.symmetric(vertical: 4),
                                   leading: Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: SpotifyColors.surfaceElevated,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Icon(
-                                      Icons.music_note_rounded,
-                                      color: SpotifyColors.textSecondary,
-                                      size: 26,
-                                    ),
+                                    width: 54, height: 54,
+                                    decoration: BoxDecoration(color: SpotifyColors.surfaceElevated, borderRadius: BorderRadius.circular(6)),
+                                    // FIX: Dynamic Cover Art support for library screen
+                                    child: songs.isNotEmpty && songs.first.thumbnail.isNotEmpty
+                                        ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(songs.first.thumbnail, fit: BoxFit.cover))
+                                        : const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 26),
                                   ),
-                                  title: Text(
-                                    name,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: SpotifyColors.textPrimary,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    'Playlist • ${songs.length} songs',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: SpotifyColors.textSecondary,
-                                      fontSize: 13,
-                                    ),
+                                  title: Text(name, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                                  subtitle: Text('Playlist • ${songs.length} songs', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
+                                  // FIX: Delete Playlist Button
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54, size: 20),
+                                    onPressed: () => _confirmDeletePlaylist(name),
                                   ),
                                   onTap: () {
                                     Navigator.push(
@@ -396,7 +312,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                           songs: songs,
                                         ),
                                       ),
-                                    ).then((_) => _loadLibrary());
+                                    ).then((_) => _loadLibrary()); // Reloads when returning if a song was removed
                                   },
                                 );
                               },
@@ -405,7 +321,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ],
                     ),
             ),
-
             const SizedBox(height: 120),
           ],
         ),
@@ -443,16 +358,7 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
   }
 
   String decodeHtml(String text) {
-    return text
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#34;', '"')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&#38;', '&')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&#x27;', "'");
+    return text.replaceAll('&quot;', '"').replaceAll('&#34;', '"').replaceAll('&amp;', '&').replaceAll('&#38;', '&').replaceAll('&#39;', "'").replaceAll('&apos;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>');
   }
 
   void _openSong(int index) {
@@ -483,25 +389,10 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          widget.title,
-          style: GoogleFonts.plusJakartaSans(
-            color: SpotifyColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        title: Text(widget.title, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700)),
       ),
       body: _songs.isEmpty
-          ? Center(
-              child: Text(
-                'No tracks found in ${widget.title}',
-                style: GoogleFonts.plusJakartaSans(
-                  color: SpotifyColors.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-            )
+          ? Center(child: Text('No tracks found in ${widget.title}', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 14)))
           : ListView.builder(
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -513,45 +404,19 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: song.thumbnail.isNotEmpty
-                          ? Image.network(song.thumbnail, fit: BoxFit.cover)
-                          : Container(color: SpotifyColors.surfaceElevated),
+                      width: 48, height: 48,
+                      child: song.thumbnail.isNotEmpty ? Image.network(song.thumbnail, fit: BoxFit.cover) : Container(color: SpotifyColors.surfaceElevated),
                     ),
                   ),
-                  title: Text(
-                    decodeHtml(song.title),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.plusJakartaSans(
-                      color: SpotifyColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: Text(
-                    decodeHtml(song.artist),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.plusJakartaSans(
-                      color: SpotifyColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
+                  title: Text(decodeHtml(song.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  subtitle: Text(decodeHtml(song.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 12)),
                   trailing: IconButton(
-                    icon: const Icon(
-                      Icons.more_vert_rounded,
-                      color: SpotifyColors.textSecondary,
-                      size: 20,
-                    ),
+                    icon: const Icon(Icons.more_vert_rounded, color: SpotifyColors.textSecondary, size: 20),
                     onPressed: () {
                       showModalBottomSheet(
                         context: context,
                         backgroundColor: SpotifyColors.surfaceElevated,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                        ),
+                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
                         builder: (_) => SongPlaylistPicker(song: song),
                       );
                     },

@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../features/player/player_screen.dart';
 import '../../models/song.dart';
 import '../../repositories/music_repository.dart';
+import 'package:music_app/theme/app_theme.dart';
+import 'package:music_app/widgets/song_playlist_picker.dart';
 
 class ArtistProfileScreen extends StatefulWidget {
   final String artistId;
@@ -257,6 +259,24 @@ class _ArtistProfileScreenState extends State<ArtistProfileScreen> {
                       color: Colors.white54,
                       fontSize: 12,
                     ),
+                  ),
+                  // FIX: ADDED 3-DOT MENU TO ARTIST SCREEN
+                  trailing: IconButton(
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: Colors.white54,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: SpotifyColors.surfaceElevated,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        builder: (_) => SongPlaylistPicker(song: song),
+                      );
+                    },
                   ),
                   onTap: () => _openSong(song, index),
                 );
