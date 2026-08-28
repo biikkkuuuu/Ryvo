@@ -186,32 +186,18 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final artists = await _repository.artistSuggestions(q);
-      final normalizedQuery = q.toLowerCase();
-
-      final exactArtist = artists.where((artist) =>
-        artist.name.trim().toLowerCase() == normalizedQuery,
-      ).firstOrNull;
-
-      final List<Song> songs;
-      if (exactArtist != null) {
-        final artistSongs = await _repository.getArtistSongsPage(
-          exactArtist.id,
-          page: 0,
-        );
-        songs = artistSongs.songs;
-      } else {
-        songs = await _repository.search(q, pages: 2);
-      }
-
+      final results = await Future.wait([
+        _repository.search(q, pages: 2),
+        _repository.artistSuggestions(q),
+      ]);
       if (!mounted) return;
       setState(() {
-        _searchResults = songs;
-        _fullSearchArtists = artists;
+        _searchResults = results[0] as List<Song>;
+        _fullSearchArtists = results[1] as List<SearchArtistResult>;
         _loading = false;
       });
     } catch (e) {
-      debugPrint('Search error: ');
+      debugPrint('Search error: $e');
       if (!mounted) return;
       setState(() {
         _loading = false;

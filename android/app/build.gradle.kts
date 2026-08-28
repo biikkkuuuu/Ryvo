@@ -22,10 +22,15 @@ android {
         applicationId = "com.example.music_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        
+        // FIX 1: Increased minSdk to 23 for Firebase
+        minSdk = flutter.minSdkVersion 
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // FIX 2: Enabled MultiDex
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -45,4 +50,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// FIX 3: Added MultiDex dependency
+dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
 }

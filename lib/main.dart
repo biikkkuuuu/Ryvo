@@ -8,6 +8,10 @@ import 'package:music_app/firebase_options.dart';
 import 'package:music_app/services/audio_service.dart' as ryvo;
 import 'package:music_app/services/ryvo_audio_handler.dart';
 
+// Import our new Force Update files
+import 'package:music_app/services/update_service.dart';
+import 'package:music_app/features/update/update_required_screen.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -20,6 +24,13 @@ Future<void> main() async {
   );
 
   // ============================================================
+  // FORCE UPDATE CHECK (Remote Config)
+  // ============================================================
+  
+  final updateService = UpdateService();
+  await updateService.initialize();
+
+  // ============================================================
   // RYVO AUDIO SERVICE
   // ============================================================
 
@@ -29,25 +40,39 @@ Future<void> main() async {
     builder: () => RyvoAudioHandler(
       audioService: ryvoAudioService,
     ),
-    config: audio_service.AudioServiceConfig(
-      androidNotificationChannelId:
-      'com.example.music_app.channel.audio',
-      androidNotificationChannelName:
-      'RYVO Music Playback',
-      androidNotificationChannelDescription:
-      'Controls for RYVO music playback',
+    config: const audio_service.AudioServiceConfig(
+      androidNotificationChannelId: 'com.example.music_app.channel.audio',
+      androidNotificationChannelName: 'RYVO Music Playback',
+      androidNotificationChannelDescription: 'Controls for RYVO music playback',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,
     ),
   );
 
   // ============================================================
-  // APP
+  // APP LAUNCH GATEKEEPER
   // ============================================================
 
-  runApp(
-    const ProviderScope(
-      child: RyvoApp(),
-    ),
-  );
+  if (updateService.isUpdateRequired) {
+    // HARD BLOCK: Bypass Riverpod and RyvoApp completely.
+    // Shows only the Update Required Screen.
+    runApp(
+      MaterialApp(
+        title: 'RYVO Update',
+        debugShowCheckedModeBanner: false,
+        home: UpdateRequiredScreen(
+          currentVersion: updateService.currentVersion,
+          latestVersion: updateService.latestVersion,
+          updateUrl: updateService.updateUrl,
+        ),
+      ),
+    );
+  } else {
+    // Normal App Flow
+    runApp(
+      const ProviderScope(
+        child: RyvoApp(),
+      ),
+    );
+  }
 }
