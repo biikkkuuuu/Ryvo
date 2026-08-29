@@ -92,6 +92,19 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
+  // INDIVIDUAL DELETE METHOD
+  Future<void> _removeSearchHistoryItem(String query) async {
+    final prefs = await SharedPreferences.getInstance();
+    final updated = List<String>.from(_searchHistory);
+    updated.removeWhere((item) => item.toLowerCase() == query.toLowerCase());
+
+    await prefs.setStringList(_searchHistoryKey, updated);
+    if (!mounted) return;
+    setState(() {
+      _searchHistory = updated;
+    });
+  }
+
   Future<void> _clearSearchHistory() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_searchHistoryKey);
@@ -176,7 +189,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _loading = false;
       });
     } catch (e) {
-      debugPrint('Search error: ');
+      debugPrint('Search error: $e');
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -272,22 +285,39 @@ class _SearchScreenState extends State<SearchScreen> {
           Wrap(
             spacing: 8, runSpacing: 8,
             children: _searchHistory.map((query) {
-              return GestureDetector(
-                onTap: () {
-                  _controller.text = query;
-                  _performSearch(query);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(color: SpotifyColors.surfaceElevated, borderRadius: BorderRadius.circular(20)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.history_rounded, color: SpotifyColors.textSecondary, size: 16),
-                      const SizedBox(width: 6),
-                      Text(query, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
+              return Container(
+                padding: const EdgeInsets.only(left: 14, right: 8, top: 6, bottom: 6),
+                decoration: BoxDecoration(color: SpotifyColors.surfaceElevated, borderRadius: BorderRadius.circular(20)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        _controller.text = query;
+                        _performSearch(query);
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.history_rounded, color: SpotifyColors.textSecondary, size: 16),
+                          const SizedBox(width: 6),
+                          Text(query, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _removeSearchHistoryItem(query),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close_rounded, color: SpotifyColors.textSecondary, size: 14),
+                      ),
+                    ),
+                  ],
                 ),
               );
             }).toList(),
@@ -351,7 +381,6 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               title: Text(decodeHtml(song.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
               subtitle: Text(decodeHtml(song.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 12)),
-              // FIX: ADDED 3-DOT MENU FOR LIVE SUGGESTIONS
               trailing: IconButton(
                 icon: const Icon(Icons.more_vert_rounded, color: SpotifyColors.textSecondary, size: 20),
                 onPressed: () {
