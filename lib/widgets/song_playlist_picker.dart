@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/services/audio_service.dart';
 import 'package:music_app/services/library_service.dart';
+import 'package:music_app/services/download_service.dart';
 import 'package:music_app/theme/app_theme.dart';
 
 class SongPlaylistPicker extends StatefulWidget {
@@ -24,7 +25,6 @@ class SongPlaylistPicker extends StatefulWidget {
 
 class _SongPlaylistPickerState extends State<SongPlaylistPicker> {
   bool _isLiked = false;
-  
   bool _showingPlaylists = false;
   List<String> _playlistNames = [];
   bool _isLoadingPlaylists = false;
@@ -87,7 +87,50 @@ class _SongPlaylistPickerState extends State<SongPlaylistPicker> {
     _showSnackBar('Added to $name');
   }
 
-  // FIX: Premium Floating SnackBar
+  void _handleDownloadAction() {
+    HapticFeedback.selectionClick();
+    if (DownloadService.instance.isDownloaded(widget.song.id)) {
+      
+      // CONFIRMATION DIALOG ADDED HERE
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF2A2A2A),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'Remove Download?', 
+              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)
+            ),
+            content: Text(
+              'Are you sure you want to delete this song from your offline library?', 
+              style: GoogleFonts.plusJakartaSans(color: Colors.white70)
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: Colors.white54, fontWeight: FontWeight.w600)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext); // Close Dialog
+                  DownloadService.instance.deleteDownload(widget.song.id);
+                  _showSnackBar('Download Removed');
+                  Navigator.pop(context); // Close Bottom Sheet
+                },
+                child: Text('Remove', style: GoogleFonts.plusJakartaSans(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      );
+
+    } else {
+      DownloadService.instance.downloadSong(widget.song);
+      _showSnackBar('Downloading...');
+    }
+  }
+
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -99,7 +142,7 @@ class _SongPlaylistPickerState extends State<SongPlaylistPicker> {
               child: Text(
                 message, 
                 style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white, // Pure white text
+                  color: Colors.white,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 )
@@ -107,8 +150,8 @@ class _SongPlaylistPickerState extends State<SongPlaylistPicker> {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF2A2A2A), // Solid dark grey 
-        behavior: SnackBarBehavior.floating,      // Float above bottom navigation
+        backgroundColor: const Color(0xFF2A2A2A), 
+        behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 2),
@@ -134,56 +177,102 @@ class _SongPlaylistPickerState extends State<SongPlaylistPicker> {
   }
 
   Widget _buildMainMenuView() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ListTile(
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              width: 48, height: 48,
-              child: widget.song.thumbnail.isNotEmpty ? Image.network(widget.song.thumbnail, fit: BoxFit.cover) : Container(color: Colors.grey),
-            ),
-          ),
-          title: Text(decodeHtml(widget.song.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
-          subtitle: Text(decodeHtml(widget.song.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: Colors.white54)),
-        ),
-        const Divider(color: Colors.white24, height: 30),
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: ValueListenableBuilder<Map<String, double>>(
+        valueListenable: DownloadService.instance.downloadProgress,
+        builder: (context, progressMap, _) {
+          final isDownloaded = DownloadService.instance.isDownloaded(widget.song.id);
+          final isDownloading = progressMap.containsKey(widget.song.id);
+          final progress = progressMap[widget.song.id] ?? 0.0;
 
-        _buildActionItem(
-          icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          color: _isLiked ? const Color(0xFF1DB954) : Colors.white,
-          text: _isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs',
-          onTap: _toggleLike,
-        ),
-        _buildActionItem(
-          icon: Icons.playlist_add_rounded,
-          color: Colors.white,
-          text: 'Add to Playlist',
-          onTap: _loadAndShowPlaylists,
-          isLoading: _isLoadingPlaylists,
-        ),
-        _buildActionItem(
-          icon: Icons.queue_music_rounded,
-          color: Colors.white,
-          text: 'Add to Queue',
-          onTap: _addToQueue,
-        ),
-        _buildActionItem(
-          icon: Icons.skip_next_rounded,
-          color: Colors.white,
-          text: 'Play Next',
-          onTap: _playNext,
-        ),
-        
-        if (widget.currentPlaylistName != null)
-          _buildActionItem(
-            icon: Icons.remove_circle_outline_rounded,
-            color: Colors.redAccent,
-            text: 'Remove from this Playlist',
-            onTap: _removeFromPlaylist,
-          ),
-      ],
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: SizedBox(
+                        width: 48, height: 48,
+                        child: widget.song.thumbnail.isNotEmpty ? Image.network(widget.song.thumbnail, fit: BoxFit.cover) : Container(color: Colors.grey),
+                      ),
+                    ),
+                    if (isDownloaded)
+                      Positioned(
+                        bottom: -2, right: -2,
+                        child: Container(
+                          decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
+                          child: const Icon(Icons.download_done_rounded, color: Color(0xFF1DB954), size: 16),
+                        ),
+                      ),
+                  ],
+                ),
+                title: Text(decodeHtml(widget.song.title), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text(decodeHtml(widget.song.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: Colors.white54)),
+              ),
+              const Divider(color: Colors.white24, height: 30),
+              
+              // DOWNLOAD BUTTON
+              ListTile(
+                leading: isDownloading 
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const Icon(Icons.downloading_rounded, color: Color(0xFF1DB954), size: 28),
+                          SizedBox(width: 28, height: 28, child: CircularProgressIndicator(value: progress, color: const Color(0xFF1DB954), strokeWidth: 2)),
+                        ],
+                      )
+                    : Icon(
+                        isDownloaded ? Icons.delete_rounded : Icons.download_rounded, 
+                        color: isDownloaded ? Colors.redAccent : Colors.white, 
+                        size: 28
+                      ),
+                title: Text(
+                  isDownloading ? 'Downloading... ${(progress * 100).toInt()}%' : (isDownloaded ? 'Remove Download' : 'Download'), 
+                  style: GoogleFonts.plusJakartaSans(color: isDownloaded && !isDownloading ? Colors.redAccent : Colors.white, fontSize: 16, fontWeight: FontWeight.w600)
+                ),
+                onTap: isDownloading ? null : _handleDownloadAction,
+              ),
+
+              _buildActionItem(
+                icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: _isLiked ? const Color(0xFF1DB954) : Colors.white,
+                text: _isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs',
+                onTap: _toggleLike,
+              ),
+              _buildActionItem(
+                icon: Icons.playlist_add_rounded,
+                color: Colors.white,
+                text: 'Add to Playlist',
+                onTap: _loadAndShowPlaylists,
+                isLoading: _isLoadingPlaylists,
+              ),
+              _buildActionItem(
+                icon: Icons.queue_music_rounded,
+                color: Colors.white,
+                text: 'Add to Queue',
+                onTap: _addToQueue,
+              ),
+              _buildActionItem(
+                icon: Icons.skip_next_rounded,
+                color: Colors.white,
+                text: 'Play Next',
+                onTap: _playNext,
+              ),
+              
+              if (widget.currentPlaylistName != null)
+                _buildActionItem(
+                  icon: Icons.remove_circle_outline_rounded,
+                  color: Colors.redAccent,
+                  text: 'Remove from this Playlist',
+                  onTap: _removeFromPlaylist,
+                ),
+            ],
+          );
+        }
+      ),
     );
   }
 

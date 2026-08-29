@@ -89,10 +89,6 @@ class MusicRepository {
 
   final Random _random = Random();
 
-  // ============================================================
-  // NORMAL SONG SEARCH
-  // ============================================================
-
   Future<List<Song>> search(String query, {int pages = 1}) async {
     final value = query.trim();
     if (value.isEmpty) return [];
@@ -131,9 +127,7 @@ class MusicRepository {
 
         return songs;
       }
-    } catch (_) {
-      // Fall through to normal song search if artist resolution fails.
-    }
+    } catch (_) {}
 
     final requests = <Future<List<dynamic>>>[];
 
@@ -159,20 +153,10 @@ class MusicRepository {
 
     for (final response in responses) {
       for (final song in _convertToSongs(response)) {
-        if (song.id.trim().isEmpty) {
-          continue;
-        }
-
+        if (song.id.trim().isEmpty) continue;
         final title = _normaliseTitle(song.title);
-
-        if (!ids.add(song.id)) {
-          continue;
-        }
-
-        if (title.isNotEmpty && !titles.add(title)) {
-          continue;
-        }
-
+        if (!ids.add(song.id)) continue;
+        if (title.isNotEmpty && !titles.add(title)) continue;
         songs.add(song);
       }
     }
@@ -180,20 +164,12 @@ class MusicRepository {
     return songs;
   }
 
-  // ============================================================
-  // LIVE SONG SUGGESTIONS
-  // ============================================================
-
   Future<List<Song>> songSuggestions(String query) async {
     final value = query.trim();
-
-    if (value.isEmpty) {
-      return [];
-    }
+    if (value.isEmpty) return [];
 
     try {
       final raw = await _service.searchSongs(value, page: 0, limit: 8);
-
       final songs = _convertToSongs(raw);
 
       final output = <Song>[];
@@ -201,25 +177,13 @@ class MusicRepository {
       final titles = <String>{};
 
       for (final song in songs) {
-        if (song.id.isEmpty) {
-          continue;
-        }
-
-        if (!ids.add(song.id)) {
-          continue;
-        }
-
+        if (song.id.isEmpty) continue;
+        if (!ids.add(song.id)) continue;
         final title = _normaliseTitle(song.title);
-
-        if (title.isNotEmpty && !titles.add(title)) {
-          continue;
-        }
+        if (title.isNotEmpty && !titles.add(title)) continue;
 
         output.add(song);
-
-        if (output.length >= 6) {
-          break;
-        }
+        if (output.length >= 6) break;
       }
 
       return output;
@@ -228,21 +192,15 @@ class MusicRepository {
     }
   }
 
-  // ============================================================
-  // CONTEXT-AWARE RECOMMENDATIONS (UP NEXT / SIMILAR SONGS)
-  // ============================================================
-
   Future<List<Song>> getSongRecommendations(Song currentSong, {List<String> excludeIds = const []}) async {
     final artistName = currentSong.artist.trim();
     
-    // Fallback directly to title if artist is utterly unknown
     if (artistName.isEmpty || artistName.toLowerCase() == 'unknown' || artistName.toLowerCase() == 'unknown artist') {
       final fallback = await songSuggestions(currentSong.title);
       return fallback.where((s) => s.id != currentSong.id && !excludeIds.contains(s.id)).toList();
     }
 
     try {
-      // 1. Resolve strongest signal: The Artist ID
       final artists = await artistSuggestions(artistName);
       final normalizedQuery = _normaliseArtistName(artistName);
       
@@ -252,7 +210,6 @@ class MusicRepository {
 
       List<Song> candidates = [];
 
-      // 2. Fetch context-relevant songs
       if (exactArtist != null) {
         final artistSongs = await getArtistSongsPage(exactArtist.id, page: 0);
         candidates = artistSongs.songs;
@@ -260,7 +217,6 @@ class MusicRepository {
         candidates = await search(artistName, pages: 1);
       }
 
-      // 3. Strict Deduplication
       final filtered = <Song>[];
       final uniqueIds = <String>{currentSong.id, ...excludeIds};
 
@@ -270,7 +226,6 @@ class MusicRepository {
         }
       }
 
-      // 4. Fill gaps with title-based semantic matching if artist pool is too small
       if (filtered.length < 5) {
         final extra = await songSuggestions(currentSong.title);
         for (final song in extra) {
@@ -280,7 +235,6 @@ class MusicRepository {
         }
       }
 
-      // 5. Shuffle to prevent repetitive predictability, return top 15
       filtered.shuffle(_random);
       return filtered.take(15).toList();
     } catch (e) {
@@ -289,68 +243,33 @@ class MusicRepository {
     }
   }
 
-  // ============================================================
-  // ARTIST SUGGESTIONS
-  // ============================================================
-
   Future<List<SearchArtistResult>> artistSuggestions(String query) async {
-    if (query.trim().isEmpty) {
-      return [];
-    }
+    if (query.trim().isEmpty) return [];
 
     try {
       final raw = await _service.searchArtists(query.trim(), page: 0, limit: 5);
-
-      return raw
-          .map(_convertArtist)
-          .whereType<SearchArtistResult>()
-          .take(5)
-          .toList();
+      return raw.map(_convertArtist).whereType<SearchArtistResult>().take(5).toList();
     } catch (_) {
       return [];
     }
   }
-
-  // ============================================================
-  // PLAYLIST SUGGESTIONS
-  // ============================================================
 
   Future<List<SearchPlaylistResult>> playlistSuggestions(String query) async {
-    if (query.trim().isEmpty) {
-      return [];
-    }
+    if (query.trim().isEmpty) return [];
 
     try {
-      final raw = await _service.searchPlaylists(
-        query.trim(),
-        page: 0,
-        limit: 5,
-      );
-
-      return raw
-          .map(_convertPlaylist)
-          .whereType<SearchPlaylistResult>()
-          .take(5)
-          .toList();
+      final raw = await _service.searchPlaylists(query.trim(), page: 0, limit: 5);
+      return raw.map(_convertPlaylist).whereType<SearchPlaylistResult>().take(5).toList();
     } catch (_) {
       return [];
     }
   }
-
-  // ============================================================
-  // FULL GLOBAL SEARCH
-  // ============================================================
 
   Future<SearchResult> globalSearch(String query) async {
     final data = await _service.globalSearch(query.trim());
 
     if (data is! Map) {
-      return const SearchResult(
-        songs: [],
-        albums: [],
-        playlists: [],
-        artists: [],
-      );
+      return const SearchResult(songs: [], albums: [], playlists: [], artists: []);
     }
 
     return SearchResult(
@@ -361,25 +280,12 @@ class MusicRepository {
     );
   }
 
-  // ============================================================
-  // ARTIST SONGS
-  // ============================================================
-
-  Future<ArtistSongsPage> getArtistSongsPage(
-    String artistId, {
-    required int page,
-  }) async {
+  Future<ArtistSongsPage> getArtistSongsPage(String artistId, {required int page}) async {
     final id = artistId.trim();
-
-    if (id.isEmpty) {
-      return const ArtistSongsPage(songs: [], total: null);
-    }
+    if (id.isEmpty) return const ArtistSongsPage(songs: [], total: null);
 
     final data = await _service.getArtistSongs(
-      id,
-      page: page,
-      sortBy: 'popularity',
-      sortOrder: 'desc',
+      id, page: page, sortBy: 'popularity', sortOrder: 'desc',
     );
 
     if (data is! Map) return const ArtistSongsPage(songs: [], total: null);
@@ -396,39 +302,21 @@ class MusicRepository {
     return ArtistSongsPage(songs: songs, total: total);
   }
 
-  // ============================================================
-  // PLAYLIST SONGS
-  // ============================================================
-
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
     final data = await _service.getPlaylist(playlistId, page: 0, limit: 50);
-
-    if (data is! Map) {
-      return [];
-    }
+    if (data is! Map) return [];
 
     final candidates = <dynamic>[];
-
     final directResults = data['results'];
-
-    if (directResults is List) {
-      candidates.addAll(directResults);
-    }
+    if (directResults is List) candidates.addAll(directResults);
 
     final songs = data['songs'];
-
-    if (songs is List) {
-      candidates.addAll(songs);
-    }
+    if (songs is List) candidates.addAll(songs);
 
     final result = data['results'];
-
     if (result is Map) {
       final nested = result['results'];
-
-      if (nested is List) {
-        candidates.addAll(nested);
-      }
+      if (nested is List) candidates.addAll(nested);
     }
 
     return _convertToSongs(candidates);
@@ -448,14 +336,6 @@ class MusicRepository {
       return [];
     }
   }
-
-  // ============================================================
-  // HOME
-  // ============================================================
-
-  // ============================================================
-  // RADIO
-  // ============================================================
 
   Future<List<dynamic>> getRadioStations(List<String> songIds) async {
     try {
@@ -483,36 +363,19 @@ class MusicRepository {
     }
   }
 
-  // ============================================================
-  // HOME - LIVE SINGLE BUNDLE
-  // ============================================================
-
   Future<Map<String, dynamic>> getHomeBundle() async {
     try {
       final homeData = await _service.getHome();
       if (homeData is! Map) throw Exception('Invalid Home response');
 
-      final newlyReleased = await _resolveHomeModuleSongs(
-        homeData['newReleases'],
-        sectionName: 'Newly Released',
-      );
-      final trending = await _resolveHomeModuleSongs(
-        homeData['newTrending'],
-        sectionName: 'Trending',
-      );
-      final charts = await _resolveHomeModuleSongs(
-        homeData['charts'],
-        sectionName: 'Charts',
-      );
-
+      final newlyReleased = await _resolveHomeModuleSongs(homeData['newReleases'], sectionName: 'Newly Released');
+      final trending = await _resolveHomeModuleSongs(homeData['newTrending'], sectionName: 'Trending');
+      final charts = await _resolveHomeModuleSongs(homeData['charts'], sectionName: 'Charts');
       final personalized = await _getPersonalizedSongs();
 
       List<SearchPlaylistResult> parsePlaylists(dynamic value) {
         if (value is! List) return [];
-        return value
-            .map(_convertPlaylist)
-            .whereType<SearchPlaylistResult>()
-            .toList();
+        return value.map(_convertPlaylist).whereType<SearchPlaylistResult>().toList();
       }
 
       List<SearchAlbumResult> parseAlbums(dynamic value) {
@@ -522,15 +385,12 @@ class MusicRepository {
 
       List<Map<String, String>> parseSimple(dynamic value) {
         if (value is! List) return [];
-        return value
-            .whereType<Map>()
-            .map((item) {
+        return value.whereType<Map>().map((item) {
               final moreInfo = item['more_info'];
               final info = moreInfo is Map ? moreInfo : const {};
               return <String, String>{
                 'id': item['id']?.toString() ?? '',
-                'title':
-                    item['title']?.toString() ?? item['name']?.toString() ?? '',
+                'title': item['title']?.toString() ?? item['name']?.toString() ?? '',
                 'subtitle': item['subtitle']?.toString() ?? '',
                 'type': item['type']?.toString() ?? '',
                 'image': item['image']?.toString() ?? '',
@@ -539,15 +399,12 @@ class MusicRepository {
                 'season': info['season_number']?.toString() ?? '',
                 'badge': info['badge']?.toString() ?? '',
               };
-            })
-            .where((item) => item['title']!.trim().isNotEmpty)
-            .toList();
+            }).where((item) => item['title']!.trim().isNotEmpty).toList();
       }
 
       return <String, dynamic>{
         'sections': <String, List<Song>>{
-          if (personalized.isNotEmpty)
-            'Made For You': personalized,
+          if (personalized.isNotEmpty) 'Made For You': personalized,
           'Newly Released': newlyReleased,
           'Trending': trending,
           'Charts': charts,
@@ -562,23 +419,14 @@ class MusicRepository {
       rethrow;
     }
   }
-
-  // ============================================================
-  // PERSONALIZED SONGS LOGIC UPDATED
-  // ============================================================
   
   Future<List<Song>> _getPersonalizedSongs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final genres = prefs.getStringList('ryvo_preferred_genres') ?? <String>[];
+      final artistIds = prefs.getStringList('ryvo_preferred_artist_ids') ?? <String>[];
 
-      final genres =
-          prefs.getStringList('ryvo_preferred_genres') ?? <String>[];
-      final artistIds =
-          prefs.getStringList('ryvo_preferred_artist_ids') ?? <String>[];
-
-      if (genres.isEmpty && artistIds.isEmpty) {
-        return <Song>[];
-      }
+      if (genres.isEmpty && artistIds.isEmpty) return <Song>[];
 
       final candidates = <Song>[];
       final ids = <String>{};
@@ -586,22 +434,12 @@ class MusicRepository {
       for (final artistId in artistIds.take(5)) {
         try {
           if (artistId.trim().isEmpty) continue;
-
           for (int page = 0; page < 3; page++) {
-            final result = await getArtistSongsPage(
-              artistId,
-              page: page,
-            );
-
-            if (result.songs.isEmpty) {
-              break;
-            }
-
+            final result = await getArtistSongsPage(artistId, page: page);
+            if (result.songs.isEmpty) break;
             for (final song in result.songs) {
               final id = song.id.trim();
-              if (id.isNotEmpty && ids.add(id)) {
-                candidates.add(song);
-              }
+              if (id.isNotEmpty && ids.add(id)) candidates.add(song);
             }
           }
         } catch (e) {
@@ -614,24 +452,16 @@ class MusicRepository {
           final result = await search(genre, pages: 1);
           for (final song in result) {
             final id = song.id.trim();
-            if (id.isNotEmpty && ids.add(id)) {
-              candidates.add(song);
-            }
+            if (id.isNotEmpty && ids.add(id)) candidates.add(song);
           }
         } catch (e) {
           debugPrint('RYVO PERSONALIZED GENRE ERROR: $e');
         }
       }
 
-      if (candidates.isEmpty) {
-        return <Song>[];
-      }
+      if (candidates.isEmpty) return <Song>[];
 
-      final finalSongs = await _selectFreshSongs(
-        sectionName: 'Made For You',
-        candidates: candidates,
-      );
-
+      final finalSongs = await _selectFreshSongs(sectionName: 'Made For You', candidates: candidates);
       return finalSongs;
     } catch (e) {
       debugPrint('RYVO PERSONALIZED ERROR: $e');
@@ -639,13 +469,7 @@ class MusicRepository {
     }
   }
 
-  // HOME - RESOLVE ALBUM/CARD OBJECTS TO REAL SONGS
-  // ============================================================
-
-  Future<List<Song>> _resolveHomeModuleSongs(
-    dynamic value, {
-    required String sectionName,
-  }) async {
+  Future<List<Song>> _resolveHomeModuleSongs(dynamic value, {required String sectionName}) async {
     if (value is! List) return [];
 
     final output = <Song>[];
@@ -666,480 +490,247 @@ class MusicRepository {
 
       if (type == 'song') {
         addSongs(_convertToSongs([item]));
-
-        if (output.length >= _songsPerSection) {
-          break;
-        }
-
+        if (output.length >= _songsPerSection) break;
         continue;
       }
 
       final albumId = item['id']?.toString().trim() ?? '';
-
-      if (albumId.isNotEmpty &&
-          (type == 'album' || type == 'compilation' || type.isEmpty)) {
-        if (!processedAlbums.add(albumId)) {
-          continue;
-        }
-
+      if (albumId.isNotEmpty && (type == 'album' || type == 'compilation' || type.isEmpty)) {
+        if (!processedAlbums.add(albumId)) continue;
         try {
           final albumData = await _service.getAlbum(albumId);
-
           dynamic rawSongs;
-
           if (albumData is Map) {
             rawSongs = albumData['songs'];
-            if (rawSongs is! List) {
-              rawSongs = albumData['list'];
-            }
+            if (rawSongs is! List) rawSongs = albumData['list'];
           }
-
           if (rawSongs is List) {
             addSongs(_convertToSongs(rawSongs.whereType<Map>().toList()));
           }
         } catch (e) {
-          debugPrint(
-            'RYVO HOME $sectionName album fetch failed '
-            '[$albumId]: $e',
-          );
+          debugPrint('RYVO HOME $sectionName album fetch failed [$albumId]: $e');
         }
       }
 
-      if (output.length >= _songsPerSection) {
-        break;
-      }
+      if (output.length >= _songsPerSection) break;
     }
 
     return _uniqueSongs(output).take(_songsPerSection).toList();
   }
 
-  // ============================================================
-  // HOME FRESH SELECTION
-  // ============================================================
-
-  Future<List<Song>> _selectFreshSongs({
-    required String sectionName,
-    required List<Song> candidates,
-  }) async {
-    if (candidates.isEmpty) {
-      return [];
-    }
+  Future<List<Song>> _selectFreshSongs({required String sectionName, required List<Song> candidates}) async {
+    if (candidates.isEmpty) return [];
 
     final prefs = await SharedPreferences.getInstance();
-
     final historyKey = 'ryvo_home_history_${_key(sectionName)}';
-
     final history = prefs.getStringList(historyKey) ?? [];
-
     final historySet = history.toSet();
 
     final shuffled = List<Song>.from(candidates)..shuffle(_random);
-
-    final fresh = shuffled
-        .where((song) => !historySet.contains(song.id))
-        .toList();
+    final fresh = shuffled.where((song) => !historySet.contains(song.id)).toList();
 
     final selected = <Song>[];
     final artists = <String, int>{};
 
     for (final song in fresh) {
-      if (selected.length >= _songsPerSection) {
-        break;
-      }
-
+      if (selected.length >= _songsPerSection) break;
       final artist = _artistKey(song.artist);
       final count = artists[artist] ?? 0;
-
-      if (count >= 2) {
-        continue;
-      }
-
+      if (count >= 2) continue;
       selected.add(song);
       artists[artist] = count + 1;
     }
 
     if (selected.length < _songsPerSection) {
       for (final song in fresh) {
-        if (selected.length >= _songsPerSection) {
-          break;
-        }
-
-        if (_containsSong(selected, song)) {
-          continue;
-        }
-
+        if (selected.length >= _songsPerSection) break;
+        if (_containsSong(selected, song)) continue;
         selected.add(song);
       }
     }
 
     if (selected.length < _songsPerSection) {
       for (final song in shuffled) {
-        if (selected.length >= _songsPerSection) {
-          break;
-        }
-
-        if (_containsSong(selected, song)) {
-          continue;
-        }
-
+        if (selected.length >= _songsPerSection) break;
+        if (_containsSong(selected, song)) continue;
         selected.add(song);
       }
     }
 
     final newHistory = <String>[...selected.map((song) => song.id), ...history];
-
     final cleanedHistory = <String>[];
     final seen = <String>{};
 
     for (final id in newHistory) {
-      if (!seen.add(id)) {
-        continue;
-      }
-
+      if (!seen.add(id)) continue;
       cleanedHistory.add(id);
-
-      if (cleanedHistory.length >= _historyLimit) {
-        break;
-      }
+      if (cleanedHistory.length >= _historyLimit) break;
     }
 
     await prefs.setStringList(historyKey, cleanedHistory);
-
     return selected;
   }
 
-  // ============================================================
-  // GLOBAL SONG PARSER
-  // ============================================================
-
   List<Song> _songsFromGlobal(Map data) {
     final raw = _findResults(data, ['songs', 'song']);
-
     return _convertToSongs(raw).take(20).toList();
   }
 
-  // ============================================================
-  // GLOBAL ALBUM PARSER
-  // ============================================================
-
   List<SearchAlbumResult> _albumsFromGlobal(Map data) {
     final raw = _findResults(data, ['albums', 'album']);
-
-    return raw
-        .map(_convertAlbum)
-        .whereType<SearchAlbumResult>()
-        .take(10)
-        .toList();
+    return raw.map(_convertAlbum).whereType<SearchAlbumResult>().take(10).toList();
   }
-
-  // ============================================================
-  // GLOBAL PLAYLIST PARSER
-  // ============================================================
 
   List<SearchPlaylistResult> _playlistsFromGlobal(Map data) {
     final raw = _findResults(data, ['playlists', 'playlist']);
-
-    return raw
-        .map(_convertPlaylist)
-        .whereType<SearchPlaylistResult>()
-        .take(10)
-        .toList();
+    return raw.map(_convertPlaylist).whereType<SearchPlaylistResult>().take(10).toList();
   }
-
-  // ============================================================
-  // GLOBAL ARTIST PARSER
-  // ============================================================
 
   List<SearchArtistResult> _artistsFromGlobal(Map data) {
     final raw = _findResults(data, ['artists', 'artist']);
-
-    return raw
-        .map(_convertArtist)
-        .whereType<SearchArtistResult>()
-        .take(10)
-        .toList();
+    return raw.map(_convertArtist).whereType<SearchArtistResult>().take(10).toList();
   }
-
-  // ============================================================
-  // FLEXIBLE RESULTS FINDER
-  // ============================================================
 
   List<dynamic> _findResults(Map data, List<String> keys) {
     for (final key in keys) {
       final value = data[key];
-
-      if (value is List) {
-        return List<dynamic>.from(value);
-      }
-
+      if (value is List) return List<dynamic>.from(value);
       if (value is Map) {
         final results = value['results'];
-
-        if (results is List) {
-          return List<dynamic>.from(results);
-        }
+        if (results is List) return List<dynamic>.from(results);
       }
     }
-
     final nestedData = data['data'];
-
-    if (nestedData is Map) {
-      return _findResults(nestedData, keys);
-    }
-
+    if (nestedData is Map) return _findResults(nestedData, keys);
     return [];
   }
 
-  // ============================================================
-  // SONG CONVERSION
-  // ============================================================
-
   List<Song> _convertToSongs(dynamic results) {
-    if (results is! List) {
-      return [];
-    }
+    if (results is! List) return [];
 
-    return results
-        .map<Song?>((item) {
-          if (item is! Map) {
-            return null;
+    return results.map<Song?>((item) {
+      if (item is! Map) return null;
+
+      final id = item['id']?.toString() ?? '';
+      final title = item['name']?.toString() ?? item['title']?.toString() ?? '';
+
+      String artist = 'Unknown';
+      String image = '';
+      String downloadUrl = '';
+
+      final artists = item['artists'];
+      if (artists is Map) {
+        final primary = artists['primary'];
+        if (primary is List && primary.isNotEmpty) {
+          final first = primary.first;
+          if (first is Map) artist = first['name']?.toString() ?? 'Unknown';
+        }
+      }
+      if (artist == 'Unknown') artist = item['subtitle']?.toString() ?? 'Unknown';
+
+      final images = item['image'];
+      if (images is List && images.isNotEmpty) {
+        final last = images.last;
+        if (last is Map) {
+          image = last['url']?.toString() ?? '';
+        } else if (last is String) {
+          image = last;
+        }
+      } else if (images is String) {
+        image = images;
+      }
+
+      // EXTRACT DOWNLOAD URL
+      final urls = item['downloadUrl'];
+      if (urls is List && urls.isNotEmpty) {
+        for (final u in urls) {
+          if (u is Map && u['quality'] == '320kbps') {
+            downloadUrl = u['url']?.toString() ?? '';
+            break;
           }
+        }
+        if (downloadUrl.isEmpty) {
+          final last = urls.last;
+          if (last is Map) downloadUrl = last['url']?.toString() ?? '';
+        }
+      }
 
-          final id = item['id']?.toString() ?? '';
-
-          final title =
-              item['name']?.toString() ?? item['title']?.toString() ?? '';
-
-          String artist = 'Unknown';
-          String image = '';
-
-          final artists = item['artists'];
-
-          if (artists is Map) {
-            final primary = artists['primary'];
-
-            if (primary is List && primary.isNotEmpty) {
-              final first = primary.first;
-
-              if (first is Map) {
-                artist = first['name']?.toString() ?? 'Unknown';
-              }
-            }
-          }
-
-          if (artist == 'Unknown') {
-            artist = item['subtitle']?.toString() ?? 'Unknown';
-          }
-
-          final images = item['image'];
-
-          if (images is List && images.isNotEmpty) {
-            final last = images.last;
-
-            if (last is Map) {
-              image = last['url']?.toString() ?? '';
-            } else if (last is String) {
-              image = last;
-            }
-          } else if (images is String) {
-            image = images;
-          }
-
-          return Song(id: id, title: title, artist: artist, thumbnail: image);
-        })
-        .whereType<Song>()
-        .toList();
+      return Song(id: id, title: title, artist: artist, thumbnail: image, downloadUrl: downloadUrl);
+    }).whereType<Song>().toList();
   }
-
-  // ============================================================
-  // ARTIST CONVERSION
-  // ============================================================
 
   SearchArtistResult? _convertArtist(dynamic item) {
-    if (item is! Map) {
-      return null;
-    }
-
+    if (item is! Map) return null;
     final id = item['id']?.toString() ?? '';
-
     final name = item['name']?.toString() ?? item['title']?.toString() ?? '';
-
-    if (id.isEmpty || name.isEmpty) {
-      return null;
-    }
-
-    return SearchArtistResult(
-      id: id,
-      name: name,
-      role: item['role']?.toString() ?? 'Artist',
-      image: _extractImage(item),
-    );
+    if (id.isEmpty || name.isEmpty) return null;
+    return SearchArtistResult(id: id, name: name, role: item['role']?.toString() ?? 'Artist', image: _extractImage(item));
   }
-
-  // ============================================================
-  // PLAYLIST CONVERSION
-  // ============================================================
 
   SearchPlaylistResult? _convertPlaylist(dynamic item) {
-    if (item is! Map) {
-      return null;
-    }
-
+    if (item is! Map) return null;
     final id = item['id']?.toString() ?? '';
-
     final name = item['name']?.toString() ?? item['title']?.toString() ?? '';
-
-    if (id.isEmpty || name.isEmpty) {
-      return null;
-    }
-
+    if (id.isEmpty || name.isEmpty) return null;
     int? count;
-
-    final rawCount =
-        item['songCount'] ?? item['song_count'] ?? item['numsongs'];
-
+    final rawCount = item['songCount'] ?? item['song_count'] ?? item['numsongs'];
     if (rawCount is int) {
       count = rawCount;
     } else if (rawCount != null) {
       count = int.tryParse(rawCount.toString());
     }
-
-    return SearchPlaylistResult(
-      id: id,
-      name: name,
-      subtitle:
-          item['subtitle']?.toString() ??
-          item['description']?.toString() ??
-          'Playlist',
-      image: _extractImage(item),
-      songCount: count,
-    );
+    return SearchPlaylistResult(id: id, name: name, subtitle: item['subtitle']?.toString() ?? item['description']?.toString() ?? 'Playlist', image: _extractImage(item), songCount: count);
   }
-
-  // ============================================================
-  // ALBUM CONVERSION
-  // ============================================================
 
   SearchAlbumResult? _convertAlbum(dynamic item) {
-    if (item is! Map) {
-      return null;
-    }
-
+    if (item is! Map) return null;
     final id = item['id']?.toString() ?? '';
-
     final name = item['name']?.toString() ?? item['title']?.toString() ?? '';
-
-    if (id.isEmpty || name.isEmpty) {
-      return null;
-    }
-
+    if (id.isEmpty || name.isEmpty) return null;
     int? count;
-
-    final rawCount =
-        item['songCount'] ?? item['song_count'] ?? item['numsongs'];
-
+    final rawCount = item['songCount'] ?? item['song_count'] ?? item['numsongs'];
     if (rawCount is int) {
       count = rawCount;
     } else if (rawCount != null) {
       count = int.tryParse(rawCount.toString());
     }
-
-    return SearchAlbumResult(
-      id: id,
-      name: name,
-      artist:
-          item['subtitle']?.toString() ?? item['artist']?.toString() ?? 'Album',
-      image: _extractImage(item),
-      songCount: count,
-    );
+    return SearchAlbumResult(id: id, name: name, artist: item['subtitle']?.toString() ?? item['artist']?.toString() ?? 'Album', image: _extractImage(item), songCount: count);
   }
-
-  // ============================================================
-  // IMAGE EXTRACTION
-  // ============================================================
 
   String _extractImage(Map item) {
     final image = item['image'];
-
-    if (image is String) {
-      return image;
-    }
-
+    if (image is String) return image;
     if (image is List && image.isNotEmpty) {
       final last = image.last;
-
-      if (last is String) {
-        return last;
-      }
-
-      if (last is Map) {
-        return last['url']?.toString() ?? '';
-      }
+      if (last is String) return last;
+      if (last is Map) return last['url']?.toString() ?? '';
     }
-
     final images = item['images'];
-
     if (images is List && images.isNotEmpty) {
       final last = images.last;
-
-      if (last is String) {
-        return last;
-      }
-
-      if (last is Map) {
-        return last['url']?.toString() ?? '';
-      }
+      if (last is String) return last;
+      if (last is Map) return last['url']?.toString() ?? '';
     }
-
     return '';
   }
 
-  // ============================================================
-  // HELPERS
-  // ============================================================
-
   List<Song> _uniqueSongs(List<Song> songs) {
     final map = <String, Song>{};
-
     for (final song in songs) {
       final id = song.id.trim();
-
-      if (id.isEmpty) {
-        continue;
-      }
-
+      if (id.isEmpty) continue;
       map[id] = song;
     }
-
     return map.values.toList();
   }
 
-  bool _containsSong(List<Song> songs, Song target) {
-    return songs.any((song) => song.id == target.id);
-  }
-
-  String _normaliseArtistName(String name) {
-    return name
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'\s+'), ' ');
-  }
-
+  bool _containsSong(List<Song> songs, Song target) => songs.any((song) => song.id == target.id);
+  String _normaliseArtistName(String name) => name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   String _artistKey(String artist) {
     final value = artist.trim().toLowerCase();
-
-    if (value.isEmpty || value == 'unknown' || value == 'unknown artist') {
-      return 'unknown';
-    }
-
+    if (value.isEmpty || value == 'unknown' || value == 'unknown artist') return 'unknown';
     return value;
   }
-
-  String _normaliseTitle(String title) {
-    return title.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-  }
-
-  String _key(String value) {
-    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
-  }
+  String _normaliseTitle(String title) => title.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  String _key(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
 }

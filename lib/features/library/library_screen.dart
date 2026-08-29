@@ -7,10 +7,11 @@ import 'package:music_app/features/player/player_screen.dart';
 import 'package:music_app/features/playlist/playlist_screen.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/services/library_service.dart';
+import 'package:music_app/services/download_service.dart';
 import 'package:music_app/theme/app_theme.dart';
 import 'package:music_app/widgets/song_playlist_picker.dart';
 
-enum LibrarySongsType { liked, recent }
+enum LibrarySongsType { liked, recent, downloads }
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -26,7 +27,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _loading = true;
   int _selectedFilterIndex = 0;
 
-  final List<String> _filters = ['All', 'Playlists', 'Liked Songs', 'Recent'];
+  final List<String> _filters = ['All', 'Playlists', 'Liked Songs', 'Downloads', 'Recent'];
 
   @override
   void initState() {
@@ -143,7 +144,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await LibraryService.instance.deletePlaylist(playlistName);
-              _loadLibrary(); // Instantly update UI
+              _loadLibrary(); 
             },
             child: Text('Delete', style: GoogleFonts.plusJakartaSans(color: Colors.redAccent, fontWeight: FontWeight.bold)),
           ),
@@ -258,9 +259,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             subtitle: Text('Playlist • ${_likedSongs.length} songs', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
                             onTap: _openLikedSongs,
                           ),
+                          
+                        // Naya: Downloaded Songs Card (LIVE REACTIVE)
+                        if (_selectedFilterIndex == 0 || _selectedFilterIndex == 3)
+                          ValueListenableBuilder<List<Song>>(
+                            valueListenable: DownloadService.instance.downloadedSongsNotifier,
+                            builder: (context, downloadsList, _) {
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                                leading: Container(
+                                  width: 54, height: 54,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(colors: [Color(0xFF1DB954), Color(0xFF0F5927)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Icon(Icons.offline_pin_rounded, color: Colors.white, size: 26),
+                                ),
+                                title: Text('Downloads', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                                subtitle: Text('Offline • ${downloadsList.length} songs', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => LibrarySongsScreen(
+                                        title: 'Downloads',
+                                        songs: downloadsList,
+                                        type: LibrarySongsType.downloads,
+                                      ),
+                                    ),
+                                  ).then((_) => _loadLibrary());
+                                },
+                              );
+                            }
+                          ),
 
                         // Pinned: Recently Played Card
-                        if (_selectedFilterIndex == 0 || _selectedFilterIndex == 3)
+                        if (_selectedFilterIndex == 0 || _selectedFilterIndex == 4)
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(vertical: 4),
                             leading: Container(
@@ -272,7 +306,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               child: const Icon(Icons.history_rounded, color: Colors.white, size: 26),
                             ),
                             title: Text('Recently Played', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-                            // FIX: Removed hardcoded length to fix the "20" issue
                             subtitle: Text('History', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
                             onTap: _openRecentlyPlayed,
                           ),
@@ -289,14 +322,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   leading: Container(
                                     width: 54, height: 54,
                                     decoration: BoxDecoration(color: SpotifyColors.surfaceElevated, borderRadius: BorderRadius.circular(6)),
-                                    // FIX: Dynamic Cover Art support for library screen
                                     child: songs.isNotEmpty && songs.first.thumbnail.isNotEmpty
                                         ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(songs.first.thumbnail, fit: BoxFit.cover))
                                         : const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 26),
                                   ),
                                   title: Text(name, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
                                   subtitle: Text('Playlist • ${songs.length} songs', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
-                                  // FIX: Delete Playlist Button
                                   trailing: IconButton(
                                     icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54, size: 20),
                                     onPressed: () => _confirmDeletePlaylist(name),
@@ -312,7 +343,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                           songs: songs,
                                         ),
                                       ),
-                                    ).then((_) => _loadLibrary()); // Reloads when returning if a song was removed
+                                    ).then((_) => _loadLibrary()); 
                                   },
                                 );
                               },
@@ -330,7 +361,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 }
 
 // ============================================================
-// LIBRARY SONGS SCREEN (FOR LIKED SONGS & RECENTLY PLAYED)
+// LIBRARY SONGS SCREEN (FOR LIKED SONGS, DOWNLOADS & RECENTLY PLAYED)
 // ============================================================
 class LibrarySongsScreen extends StatefulWidget {
   final String title;
@@ -375,7 +406,13 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
           currentIndex: index,
         ),
       ),
-    );
+    ).then((_) {
+      if (mounted && widget.type == LibrarySongsType.downloads) {
+        setState(() {
+          _songs = DownloadService.instance.downloadedSongs;
+        });
+      }
+    });
   }
 
   @override
@@ -418,7 +455,13 @@ class _LibrarySongsScreenState extends State<LibrarySongsScreen> {
                         backgroundColor: SpotifyColors.surfaceElevated,
                         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
                         builder: (_) => SongPlaylistPicker(song: song),
-                      );
+                      ).then((_) {
+                        if (widget.type == LibrarySongsType.downloads) {
+                          setState(() {
+                            _songs = DownloadService.instance.downloadedSongs;
+                          });
+                        }
+                      });
                     },
                   ),
                   onTap: () => _openSong(index),
