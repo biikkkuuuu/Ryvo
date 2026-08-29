@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:music_app/app/theme_controller.dart';
 import 'package:music_app/models/song.dart';
+import 'package:music_app/repositories/music_repository.dart';
 import 'package:music_app/services/audio_service.dart';
 import 'package:music_app/services/library_service.dart';
 import 'package:music_app/services/lyrics_service.dart';
@@ -42,9 +43,11 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   final AudioService audioService = AudioService();
   final LyricsService lyricsService = LyricsService();
+  final MusicRepository _musicRepository = MusicRepository();
 
   late int currentIndex;
   late Song activeSong;
+  late List<Song> _currentPlaylist;
 
   bool isPlaying = false;
   bool isLoadingSong = false;
@@ -67,16 +70,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isLoadingLyrics = false;
   bool _isSyncedLyrics = false;
   List<LyricLine> _parsedLyrics = [];
+  
+  // FIX: Added Main Scroll Controller to snap to top
+  final ScrollController _mainScrollController = ScrollController();
   final ScrollController _lyricsScrollController = ScrollController();
+  
   int _lastActiveLyricIndex = -1;
   final List<GlobalKey> _lyricKeys = [];
+
+  List<Song> _recommendedSongs = [];
+  bool _isLoadingRecommendations = false;
+  bool _hasShownSwipeHint = false;
 
   @override
   void initState() {
     super.initState();
     currentIndex = widget.currentIndex;
-    activeSong = widget.playlist.isNotEmpty
-        ? widget.playlist[currentIndex.clamp(0, widget.playlist.length - 1)]
+    _currentPlaylist = List.from(widget.playlist);
+    
+    activeSong = _currentPlaylist.isNotEmpty
+        ? _currentPlaylist[currentIndex.clamp(0, _currentPlaylist.length - 1)]
         : Song(
             id: widget.songId,
             title: widget.title,
@@ -89,7 +102,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _initialize() async {
     await LibraryService.instance.init();
-    if (!mounted || widget.playlist.isEmpty) return;
+    if (!mounted || _currentPlaylist.isEmpty) return;
 
     setState(() {
       isFavorite = LibraryService.instance.isLiked(activeSong.id);
@@ -97,8 +110,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     _listenToPlayer();
     _fetchLyrics();
+    _fetchRecommendations(activeSong);
 
-    audioService.setPlaybackQueue(widget.playlist, currentIndex: currentIndex);
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted && !_hasShownSwipeHint) {
+        _hasShownSwipeHint = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.swipe_up_rounded, color: Colors.black, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Swipe up for recommended songs',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1DB954),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.only(bottom: 30, left: 24, right: 24),
+            duration: const Duration(seconds: 4),
+            elevation: 10,
+          ),
+        );
+      }
+    });
+
+    audioService.setPlaybackQueue(_currentPlaylist, currentIndex: currentIndex);
 
     final current = audioService.currentSong.value;
     if (current?.id == activeSong.id && audioService.audioPlayer.duration != null) {
@@ -149,7 +195,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Scrollable.ensureVisible(
                 key.currentContext!,
                 duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOut,
+                curve: Curves.easeOutCubic,
                 alignment: 0.5,
               );
             }
@@ -174,6 +220,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _stateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _mainScrollController.dispose();
     _lyricsScrollController.dispose();
     audioService.currentSong.removeListener(_onCurrentSongChanged);
     super.dispose();
@@ -183,7 +230,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final song = audioService.currentSong.value;
     if (!mounted || song == null) return;
 
-    final playlistIndex = widget.playlist.indexWhere((item) => item.id == song.id);
+    final playlistIndex = _currentPlaylist.indexWhere((item) => item.id == song.id);
 
     setState(() {
       activeSong = song;
@@ -196,6 +243,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     
     _fetchLyrics();
+    _fetchRecommendations(song);
+  }
+
+  Future<void> _fetchRecommendations(Song currentSong) async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingRecommendations = true;
+      _recommendedSongs.clear();
+    });
+
+    final excludeIds = _currentPlaylist.map((s) => s.id).toList();
+    excludeIds.add(currentSong.id);
+
+    final recs = await _musicRepository.getSongRecommendations(currentSong, excludeIds: excludeIds);
+
+    if (!mounted) return;
+    
+    if (activeSong.id == currentSong.id) {
+      setState(() {
+        _recommendedSongs = recs;
+        _isLoadingRecommendations = false;
+      });
+    }
+  }
+
+  void _playRecommendedSong(Song song) {
+    HapticFeedback.lightImpact();
+    
+    // Smoothly scroll back to top to view player
+    if (_mainScrollController.hasClients) {
+      _mainScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+
+    setState(() {
+      _currentPlaylist.add(song);
+      currentIndex = _currentPlaylist.length - 1;
+      activeSong = song;
+    });
+    audioService.setPlaybackQueue(_currentPlaylist, currentIndex: currentIndex);
+    startSong();
   }
 
   Future<void> _fetchLyrics() async {
@@ -265,6 +352,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _toggleLyricsMode() {
     HapticFeedback.selectionClick();
+    
+    // FIX: Lock the screen to the top BEFORE showing lyrics so it doesn't float
+    if (!_isLyricsMode && _mainScrollController.hasClients) {
+      _mainScrollController.jumpTo(0);
+    }
+
     setState(() {
       _isLyricsMode = !_isLyricsMode;
     });
@@ -278,7 +371,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             Scrollable.ensureVisible(
               key.currentContext!,
               duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
+              curve: Curves.easeOutCubic,
               alignment: 0.5,
             );
           }
@@ -298,7 +391,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> startSong() async {
-    if (widget.playlist.isEmpty) return;
+    if (_currentPlaylist.isEmpty) return;
     final song = activeSong;
     setState(() => isLoadingSong = true);
 
@@ -329,33 +422,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> playNext() async {
     HapticFeedback.lightImpact();
-    if (widget.playlist.isEmpty) return;
+    if (_currentPlaylist.isEmpty) return;
+    
     if (isShuffle) {
       setState(() {
-        currentIndex = (currentIndex + 1) % widget.playlist.length;
-        activeSong = widget.playlist[currentIndex];
+        currentIndex = (currentIndex + 1) % _currentPlaylist.length;
+        activeSong = _currentPlaylist[currentIndex];
       });
       await startSong();
       return;
     }
-    if (currentIndex < widget.playlist.length - 1) {
+    
+    if (currentIndex < _currentPlaylist.length - 1) {
       setState(() {
         currentIndex++;
-        activeSong = widget.playlist[currentIndex];
+        activeSong = _currentPlaylist[currentIndex];
       });
       await startSong();
-    } else if (repeatMode == 1) {
+    } 
+    else if (repeatMode == 1) {
       setState(() {
         currentIndex = 0;
-        activeSong = widget.playlist[0];
+        activeSong = _currentPlaylist[0];
       });
       await startSong();
+    } 
+    else if (repeatMode == 0 && _recommendedSongs.isNotEmpty) {
+      _playRecommendedSong(_recommendedSongs.first);
+    } 
+    else {
+      await audioService.pause();
     }
   }
 
   Future<void> playPrevious() async {
     HapticFeedback.lightImpact();
-    if (widget.playlist.isEmpty) return;
+    if (_currentPlaylist.isEmpty) return;
     if (currentPosition.inSeconds > 4) {
       await audioService.seek(Duration.zero);
       return;
@@ -363,7 +465,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (currentIndex > 0) {
       setState(() {
         currentIndex--;
-        activeSong = widget.playlist[currentIndex];
+        activeSong = _currentPlaylist[currentIndex];
       });
       await startSong();
     } else {
@@ -422,7 +524,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Playback Queue', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                      Text('${widget.playlist.length} tracks', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
+                      Text('${_currentPlaylist.length} tracks', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -430,9 +532,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 Expanded(
                   child: ListView.builder(
                     controller: scrollController,
-                    itemCount: widget.playlist.length,
+                    itemCount: _currentPlaylist.length,
                     itemBuilder: (context, index) {
-                      final item = widget.playlist[index];
+                      final item = _currentPlaylist[index];
                       final isCurrent = index == currentIndex;
                       final currentTheme = RyvoThemeController.themes[RyvoThemeController.instance.selectedTheme];
 
@@ -450,10 +552,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           style: GoogleFonts.plusJakartaSans(color: isCurrent ? currentTheme.primary : SpotifyColors.textPrimary, fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500, fontSize: 14),
                         ),
                         subtitle: Text(decodeHtml(item.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 12)),
-                        trailing: isCurrent ? Icon(Icons.volume_up_rounded, color: currentTheme.primary, size: 20) : null,
+                        trailing: isCurrent 
+                            ? Icon(Icons.volume_up_rounded, color: currentTheme.primary, size: 20) 
+                            : IconButton(
+                                icon: const Icon(Icons.more_vert_rounded, color: SpotifyColors.textSecondary, size: 20),
+                                onPressed: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    backgroundColor: SpotifyColors.surfaceElevated,
+                                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                                    builder: (_) => SongPlaylistPicker(song: item),
+                                  );
+                                },
+                              ),
                         onTap: () {
                           Navigator.pop(context);
-                          setState(() { currentIndex = index; activeSong = widget.playlist[index]; });
+                          setState(() { currentIndex = index; activeSong = _currentPlaylist[index]; });
                           startSong();
                         },
                       );
@@ -587,6 +701,117 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  Widget _buildRecommendations() {
+    if (_isLoadingRecommendations) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator(color: SpotifyColors.green)),
+      );
+    }
+
+    if (_recommendedSongs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Text(
+            'Recommended Next',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 180,
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            scrollDirection: Axis.horizontal,
+            itemCount: _recommendedSongs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final song = _recommendedSongs[index];
+              return GestureDetector(
+                onTap: () => _playRecommendedSong(song),
+                child: SizedBox(
+                  width: 120,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: song.thumbnail.isNotEmpty
+                              ? Image.network(song.thumbnail, fit: BoxFit.cover)
+                              : Container(color: Colors.white10),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  decodeHtml(song.title),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  decodeHtml(song.artist),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white54,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                backgroundColor: SpotifyColors.surfaceElevated,
+                                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                                builder: (_) => SongPlaylistPicker(song: song),
+                              );
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.only(top: 2, bottom: 8, left: 4),
+                              child: Icon(Icons.more_vert_rounded, color: Colors.white54, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentTheme = RyvoThemeController.themes[RyvoThemeController.instance.selectedTheme];
@@ -597,7 +822,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: SpotifyColors.background,
       body: Stack(
         children: [
-          // 1. FIXED SEAMLESS GRADIENT - Matching exactly with Scaffold background
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -606,189 +830,216 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   end: Alignment.bottomCenter,
                   colors: [
                     currentTheme.primaryDark.withValues(alpha: 0.6),
-                    SpotifyColors.background, // Match the exact app background to eliminate seam
+                    SpotifyColors.background,
                   ],
                   stops: const [0.0, 0.7],
                 ),
               ),
             ),
           ),
-
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  // Top App Bar
-                  SizedBox(
-                    height: 52,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          
+          // FIX 2: Outer Scroll View strictly locked when Lyrics mode is active
+          CustomScrollView(
+            controller: _mainScrollController,
+            physics: _isLyricsMode ? const NeverScrollableScrollPhysics() : const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false, // Ensures UI takes exactly screen height
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 34, color: SpotifyColors.textPrimary),
-                          onPressed: () {
-                            if (_isLyricsMode) {
-                              _toggleLyricsMode();
-                            } else {
-                              Navigator.pop(context);
-                            }
-                          },
-                        ),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                        SizedBox(
+                          height: 52,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('PLAYING FROM PLAYLIST', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-                              const SizedBox(height: 2),
-                              Text(decodeHtml(activeSong.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+                              IconButton(
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 34, color: SpotifyColors.textPrimary),
+                                onPressed: () {
+                                  if (_isLyricsMode) {
+                                    _toggleLyricsMode();
+                                  } else {
+                                    Navigator.pop(context);
+                                  }
+                                },
+                              ),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('PLAYING FROM PLAYLIST', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                                    const SizedBox(height: 2),
+                                    Text(decodeHtml(activeSong.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.more_vert_rounded, size: 24, color: SpotifyColors.textPrimary),
+                                onPressed: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    backgroundColor: SpotifyColors.surfaceElevated,
+                                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                                    builder: (_) => SongPlaylistPicker(song: activeSong),
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.more_vert_rounded, size: 24, color: SpotifyColors.textPrimary),
-                          onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              backgroundColor: SpotifyColors.surfaceElevated,
-                              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-                              builder: (_) => SongPlaylistPicker(song: activeSong),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // MAIN ANIMATED SECTION
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        // 1. FIXED OVERLAP: Positioned layer limits the scroll boundary below the artwork
-                        Positioned(
-                          top: 90, // Strict boundary so lyrics NEVER go behind or above the minimized cover
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: IgnorePointer(
-                            ignoring: !_isLyricsMode,
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 300),
-                              opacity: _isLyricsMode ? 1.0 : 0.0,
-                              child: _isLoadingLyrics
-                                  ? const Center(child: CircularProgressIndicator(color: SpotifyColors.green))
-                                  : _parsedLyrics.isEmpty
-                                      ? Center(child: Text('Lyrics not available for this track.', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 14)))
-                                      : ListView(
-                                          controller: _lyricsScrollController,
-                                          physics: const BouncingScrollPhysics(),
-                                          padding: EdgeInsets.only(
-                                            top: 16,
-                                            bottom: MediaQuery.of(context).size.height * 0.5,
+                        
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              // LYRICS LAYER (Now physically bound below 90px gap)
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  ignoring: !_isLyricsMode,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 300),
+                                    opacity: _isLyricsMode ? 1.0 : 0.0,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(height: 90), // Strict barrier below artwork
+                                        Expanded(
+                                          child: ShaderMask(
+                                            shaderCallback: (bounds) => const LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+                                              stops: [0.0, 0.1, 0.8, 1.0],
+                                            ).createShader(bounds),
+                                            blendMode: BlendMode.dstIn,
+                                            child: _isLoadingLyrics
+                                                ? const Center(child: CircularProgressIndicator(color: SpotifyColors.green))
+                                                : _parsedLyrics.isEmpty
+                                                    ? Center(child: Text('Lyrics not available for this track.', style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 14)))
+                                                    : ListView(
+                                                        controller: _lyricsScrollController,
+                                                        physics: const BouncingScrollPhysics(),
+                                                        padding: EdgeInsets.only(
+                                                          top: 0,
+                                                          bottom: MediaQuery.of(context).size.height * 0.5,
+                                                        ),
+                                                        children: _parsedLyrics.asMap().entries.map((entry) {
+                                                          final index = entry.key;
+                                                          final line = entry.value;
+                                                          final isCurrentLine = _isSyncedLyrics && index == activeLyricIndex;
+                                                          
+                                                          return Padding(
+                                                            key: _lyricKeys[index], 
+                                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                                            child: Text(
+                                                              line.text,
+                                                              style: GoogleFonts.plusJakartaSans(
+                                                                color: isCurrentLine ? Colors.white : Colors.white70,
+                                                                fontSize: isCurrentLine ? 22 : 18,
+                                                                fontWeight: isCurrentLine ? FontWeight.w800 : FontWeight.w600,
+                                                                height: 1.4,
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }).toList(),
+                                                      ),
                                           ),
-                                          children: _parsedLyrics.asMap().entries.map((entry) {
-                                            final index = entry.key;
-                                            final line = entry.value;
-                                            final isCurrentLine = _isSyncedLyrics && index == activeLyricIndex;
-                                            
-                                            return Padding(
-                                              key: _lyricKeys[index], 
-                                              padding: const EdgeInsets.symmetric(vertical: 10),
-                                              child: Text(
-                                                line.text,
-                                                style: GoogleFonts.plusJakartaSans(
-                                                  // FIXED BLURRY TEXT: Increased alpha to 0.6 for sharp readability
-                                                  color: isCurrentLine ? Colors.white : Colors.white.withValues(alpha: 0.6),
-                                                  fontSize: isCurrentLine ? 22 : 18,
-                                                  fontWeight: isCurrentLine ? FontWeight.w800 : FontWeight.w600,
-                                                  height: 1.4,
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
                                         ),
-                            ),
-                          ),
-                        ),
-
-                        // 2. Player Controls Layer
-                        IgnorePointer(
-                          ignoring: _isLyricsMode,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 300),
-                            opacity: _isLyricsMode ? 0.0 : 1.0,
-                            child: _buildPlayerControls(safePosition, currentTheme),
-                          ),
-                        ),
-
-                        // 3. Animated Artwork Layer
-                        AnimatedAlign(
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeOutCubic,
-                          alignment: _isLyricsMode ? Alignment.topLeft : const Alignment(0.0, -0.65),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 400),
-                            curve: Curves.easeOutCubic,
-                            margin: EdgeInsets.only(
-                              top: _isLyricsMode ? 10 : 0, 
-                            ),
-                            width: _isLyricsMode ? 72 : MediaQuery.of(context).size.width * 0.76, 
-                            height: _isLyricsMode ? 72 : MediaQuery.of(context).size.width * 0.76,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(_isLyricsMode ? 8 : 12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: _isLyricsMode ? 0.3 : 0.65),
-                                  blurRadius: _isLyricsMode ? 10 : 30,
-                                  offset: Offset(0, _isLyricsMode ? 4 : 16),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(_isLyricsMode ? 8 : 12),
-                              child: activeSong.thumbnail.isNotEmpty
-                                  ? Image.network(activeSong.thumbnail, fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 64)))
-                                  : Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 64)),
-                            ),
+                              ),
+
+                              IgnorePointer(
+                                ignoring: _isLyricsMode,
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 300),
+                                  opacity: _isLyricsMode ? 0.0 : 1.0,
+                                  child: _buildPlayerControls(safePosition, currentTheme),
+                                ),
+                              ),
+
+                              AnimatedAlign(
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeOutCubic,
+                                alignment: _isLyricsMode ? Alignment.topLeft : const Alignment(0.0, -0.65),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 400),
+                                  curve: Curves.easeOutCubic,
+                                  margin: EdgeInsets.only(
+                                    top: _isLyricsMode ? 10 : 0, 
+                                  ),
+                                  width: _isLyricsMode ? 72 : MediaQuery.of(context).size.width * 0.76, 
+                                  height: _isLyricsMode ? 72 : MediaQuery.of(context).size.width * 0.76,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(_isLyricsMode ? 8 : 12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: _isLyricsMode ? 0.3 : 0.65),
+                                        blurRadius: _isLyricsMode ? 10 : 30,
+                                        offset: Offset(0, _isLyricsMode ? 4 : 16),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(_isLyricsMode ? 8 : 12),
+                                    child: activeSong.thumbnail.isNotEmpty
+                                        ? Image.network(activeSong.thumbnail, fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 64)))
+                                        : Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 64)),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                        
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _toggleLyricsMode, 
+                              icon: Icon(
+                                Icons.lyrics_rounded,
+                                color: _isLyricsMode ? currentTheme.primary : SpotifyColors.textSecondary,
+                                size: 18,
+                              ),
+                              label: Text(
+                                'Lyrics',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: _isLyricsMode ? currentTheme.primary : SpotifyColors.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              splashRadius: 22,
+                              icon: const Icon(Icons.queue_music_rounded, color: SpotifyColors.textSecondary, size: 24),
+                              onPressed: _showQueueSheet,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Bottom Action Buttons Layer (Fixed, Unobstructed)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _toggleLyricsMode, 
-                        icon: Icon(
-                          Icons.lyrics_rounded,
-                          color: _isLyricsMode ? currentTheme.primary : SpotifyColors.textSecondary,
-                          size: 18,
-                        ),
-                        label: Text(
-                          'Lyrics',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: _isLyricsMode ? currentTheme.primary : SpotifyColors.textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        splashRadius: 22,
-                        icon: const Icon(Icons.queue_music_rounded, color: SpotifyColors.textSecondary, size: 24),
-                        onPressed: _showQueueSheet,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                ),
               ),
-            ),
+              
+              // FIX 3: Hide Recommendations explicitly when Lyrics Mode is active
+              if (!_isLyricsMode) 
+                SliverToBoxAdapter(
+                  child: _buildRecommendations(),
+                ),
+              if (!_isLyricsMode) 
+                const SliverToBoxAdapter(
+                  child: SafeArea(top: false, child: SizedBox(height: 40)),
+                ),
+            ],
           ),
         ],
       ),
