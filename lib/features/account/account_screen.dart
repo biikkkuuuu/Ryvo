@@ -88,6 +88,8 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _signOut() async {
+    // Only sign out from Firebase. Do NOT clear SharedPreferences here.
+    // The LibraryService will handle fetching the correct data for the new/guest user.
     await _auth.signOut();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -294,7 +296,7 @@ class _AccountScreenState extends State<AccountScreen> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         children: [
-          // Profile Hero Card (CLEAN - NO BADGES)
+          // Profile Hero Card
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -535,7 +537,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     ),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: SpotifyColors.textSecondary),
-                  onTap: _showContactBottomSheet, // Calls the newly built bottom sheet
+                  onTap: _showContactBottomSheet,
                 ),
               ],
             ),

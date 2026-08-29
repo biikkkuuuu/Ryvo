@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:music_app/models/song.dart';
+import 'package:flutter/foundation.dart'; // Added for debugPrint
 
 class LibraryService {
   LibraryService._internal();
@@ -27,7 +28,84 @@ class LibraryService {
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
+    await _migrateLegacyData();
   }
+
+  // --- Idempotent Migration Logic ---
+  Future<void> _migrateLegacyData() async {
+    if (_prefs == null) return;
+    bool needsMigration = false;
+
+    // Liked Songs Migration
+    if (_prefs!.containsKey(_likedKeyBase)) {
+      final legacyLiked = _prefs!.getStringList(_likedKeyBase);
+      if (legacyLiked != null && legacyLiked.isNotEmpty) {
+        final existingNew = _prefs!.getStringList(_likedKey) ?? [];
+        if (existingNew.isEmpty) {
+          await _prefs!.setStringList(_likedKey, legacyLiked);
+          debugPrint('RYVO MIGRATION: Migrated Liked Songs');
+        }
+      }
+      await _prefs!.remove(_likedKeyBase);
+      needsMigration = true;
+    }
+
+    // Recently Played Migration
+    if (_prefs!.containsKey(_recentKeyBase)) {
+      final legacyRecent = _prefs!.getStringList(_recentKeyBase);
+      if (legacyRecent != null && legacyRecent.isNotEmpty) {
+         final existingNew = _prefs!.getStringList(_recentKey) ?? [];
+         if (existingNew.isEmpty) {
+           await _prefs!.setStringList(_recentKey, legacyRecent);
+           debugPrint('RYVO MIGRATION: Migrated Recently Played');
+         }
+      }
+      await _prefs!.remove(_recentKeyBase);
+      needsMigration = true;
+    }
+
+    // Search History Migration
+    if (_prefs!.containsKey(_searchHistoryKeyBase)) {
+      final legacySearch = _prefs!.getStringList(_searchHistoryKeyBase);
+      if (legacySearch != null && legacySearch.isNotEmpty) {
+        final existingNew = _prefs!.getStringList(_searchHistoryKey) ?? [];
+        if (existingNew.isEmpty) {
+           await _prefs!.setStringList(_searchHistoryKey, legacySearch);
+           debugPrint('RYVO MIGRATION: Migrated Search History');
+        }
+      }
+      await _prefs!.remove(_searchHistoryKeyBase);
+      needsMigration = true;
+    }
+    
+    // Playlists Migration (More complex, iterates through all keys)
+    if (_prefs!.containsKey(_playlistNamesKeyBase)) {
+      final legacyPlaylistNames = _prefs!.getStringList(_playlistNamesKeyBase);
+      if (legacyPlaylistNames != null && legacyPlaylistNames.isNotEmpty) {
+        final existingNewNames = _prefs!.getStringList(_playlistNamesKey) ?? [];
+        if (existingNewNames.isEmpty) {
+          await _prefs!.setStringList(_playlistNamesKey, legacyPlaylistNames);
+          for (final name in legacyPlaylistNames) {
+             final legacyKey = '$_playlistPrefixBase${name.trim()}';
+             final newKey = '$_playlistPrefix${name.trim()}';
+             final playlistData = _prefs!.getStringList(legacyKey);
+             if (playlistData != null) {
+                await _prefs!.setStringList(newKey, playlistData);
+                await _prefs!.remove(legacyKey);
+             }
+          }
+          debugPrint('RYVO MIGRATION: Migrated Playlists');
+        }
+      }
+      await _prefs!.remove(_playlistNamesKeyBase);
+      needsMigration = true;
+    }
+
+    if (needsMigration) {
+      debugPrint('RYVO MIGRATION: Legacy data cleanup complete.');
+    }
+  }
+
 
   Map<String, dynamic> _songToMap(Song song) => {
     'id': song.id,
@@ -101,7 +179,7 @@ class LibraryService {
     songs.removeWhere((item) => item.id == song.id);
     songs.insert(0, song);
 
-    // FIX: Limit increased from 20 to 200 for substantial history retention
+    // Limit increased to 200 for substantial history retention
     if (songs.length > 200) {
       songs.removeRange(200, songs.length);
     }
