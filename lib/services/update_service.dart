@@ -1,5 +1,5 @@
 import 'dart:developer';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:firebase_remote_config/package_firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class UpdateService {
@@ -50,8 +50,13 @@ class UpdateService {
   /// Semantic version comparison logic (e.g., current: 1.0.0, minimum: 1.0.1 -> returns true)
   bool _isVersionOlder(String current, String minimum) {
     try {
-      final cParts = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-      final mParts = minimum.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      // FIX: Remove build number (+ symbol and anything after it) before splitting
+      // This prevents int.tryParse from failing and defaulting to 0
+      final cleanCurrent = current.split('+')[0];
+      final cleanMinimum = minimum.split('+')[0];
+
+      final cParts = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final mParts = cleanMinimum.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
       for (int i = 0; i < 3; i++) {
         final c = i < cParts.length ? cParts[i] : 0;
