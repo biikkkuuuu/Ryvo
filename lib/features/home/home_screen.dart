@@ -136,7 +136,10 @@ class _SpotifyMiniPlayer extends StatelessWidget {
     return ValueListenableBuilder<Song?>(
       valueListenable: audio.currentSong,
       builder: (context, song, _) {
-        if (song == null) return const SizedBox.shrink();
+        if (song == null || song.id.trim().isEmpty || song.title == 'RYVO') {
+            return const SizedBox.shrink();
+        }
+        
         final currentTheme = RyvoThemeController.themes[RyvoThemeController.instance.selectedTheme];
 
         return StreamBuilder<PlayerState>(
@@ -148,7 +151,7 @@ class _SpotifyMiniPlayer extends StatelessWidget {
 
             void openFullPlayer() {
               final currentSong = audio.currentSong.value;
-              if (currentSong == null) return;
+              if (currentSong == null || currentSong.id.trim().isEmpty) return;
               final playbackQueue = List<Song>.from(audio.queue.value);
               final playlist = <Song>[currentSong, ...playbackQueue];
               Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(
@@ -181,7 +184,7 @@ class _SpotifyMiniPlayer extends StatelessWidget {
                                   width: 42, height: 42,
                                   child: song.thumbnail.trim().isEmpty
                                       ? Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 22))
-                                      : Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 22))),
+                                      : Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 22))),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -283,6 +286,9 @@ class _HomeTabContentState extends State<_HomeTabContent> {
   List<SearchAlbumResult> _homeAlbums = [];
   List<dynamic> _radioStations = [];
   List<SearchPlaylistResult> _moodPlaylists = [];
+  List<Map<String, String>> _discoverMixes = [];
+  List<Map<String, String>> _topShows = [];
+
   String? _selectedMood;
   bool _loadingMoodPlaylists = false;
   bool _loadingRadio = false;
@@ -367,6 +373,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
         if (showLoader) _loading = true;
         _error = null;
         _sections = {}; _homePlaylists = []; _homeAlbums = []; _recentlyPlayed = []; _radioStations = []; _loadingRadio = false;
+        _discoverMixes = []; _topShows = [];
       });
     }
     try {
@@ -375,10 +382,13 @@ class _HomeTabContentState extends State<_HomeTabContent> {
       if (!mounted) return;
       final home = results[0] as Map<String, dynamic>;
       final recent = results[1] as List<Song>;
+      
       setState(() {
         _sections = home['sections'] as Map<String, List<Song>>? ?? {};
         _homePlaylists = home['playlists'] as List<SearchPlaylistResult>? ?? [];
         _homeAlbums = home['albums'] as List<SearchAlbumResult>? ?? [];
+        _discoverMixes = home['discover'] as List<Map<String, String>>? ?? [];
+        _topShows = home['shows'] as List<Map<String, String>>? ?? [];
         _recentlyPlayed = recent;
         _loading = false; _error = null;
       });
@@ -486,19 +496,25 @@ class _HomeTabContentState extends State<_HomeTabContent> {
             ),
           )
           else ...[
-            if (_selectedFilterIndex == 0) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 20), child: _buildQuickAccessGrid(currentTheme.primary))),
+            if (_selectedFilterIndex == 0) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 20, 16, 20), child: _buildQuickAccessGrid(currentTheme.primary))),
             if (_selectedFilterIndex == 0) Builder(builder: (context) {
               final forYouSongs = _sections['Made For You'] ?? _sections['For You'] ?? [];
               if (forYouSongs.isEmpty) return const SliverToBoxAdapter();
               return SliverToBoxAdapter(child: _buildTrackSection('For You', forYouSongs, currentTheme.primary));
             }),
+            
+            if (_selectedFilterIndex == 0 && _discoverMixes.isNotEmpty) SliverToBoxAdapter(child: _buildSimpleSection('Discover & Mixes', _discoverMixes, currentTheme.primary)),
             if (_selectedFilterIndex == 0 && _homePlaylists.isNotEmpty) SliverToBoxAdapter(child: _buildPlaylistsSection('Top Playlists', _homePlaylists, currentTheme.primary)),
             if (_selectedFilterIndex == 0 && _recentlyPlayed.isNotEmpty) SliverToBoxAdapter(child: _buildRecentlyPlayedSection(currentTheme.primary)),
             if (_selectedFilterIndex == 0 && _homeAlbums.isNotEmpty) SliverToBoxAdapter(child: _buildAlbumsSection('Popular Albums', _homeAlbums, currentTheme.primary)),
+            
             if (_selectedFilterIndex == 0 || _selectedFilterIndex == 1) ..._sections.entries.where((entry) => entry.key != 'Charts' && entry.key != 'Made For You' && entry.key != 'For You').map((entry) {
               if (entry.value.isEmpty) return const SliverToBoxAdapter();
               return SliverToBoxAdapter(child: _buildTrackSection(entry.key, entry.value, currentTheme.primary));
             }),
+
+            if (_selectedFilterIndex == 0 && _topShows.isNotEmpty) SliverToBoxAdapter(child: _buildSimpleSection('Top Shows & Podcasts', _topShows, currentTheme.primary)),
+
             if (_selectedFilterIndex == 2) Builder(builder: (context) {
               List<Song> chartSongs = _sections['Charts'] ?? [];
               if (chartSongs.isEmpty) chartSongs = _sections['Trending'] ?? _sections['Newly Released'] ?? [];
@@ -603,7 +619,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                   child: SizedBox(
                     width: 56, height: 56,
                     child: song.thumbnail.isNotEmpty
-                        ? Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: SpotifyColors.surfaceHighlight, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary)))
+                        ? Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceHighlight, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary)))
                         : Container(color: SpotifyColors.surfaceHighlight, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary)),
                   ),
                 ),
@@ -611,7 +627,6 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                 Expanded(
                   child: Text(decodeHtml(song.title), maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700, height: 1.2)),
                 ),
-                // FIX: ADDED 3-DOT MENU FOR QUICK ACCESS GRID
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
@@ -665,7 +680,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                         child: AspectRatio(
                           aspectRatio: 1,
                           child: image.isNotEmpty
-                              ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: accentColor.withValues(alpha: 0.12), child: Icon(Icons.radio_rounded, size: 42, color: accentColor)))
+                              ? Image.network(image, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: accentColor.withValues(alpha: 0.12), child: Icon(Icons.radio_rounded, size: 42, color: accentColor)))
                               : Container(color: accentColor.withValues(alpha: 0.12), child: Icon(Icons.radio_rounded, size: 42, color: accentColor)),
                         ),
                       ),
@@ -702,8 +717,25 @@ class _HomeTabContentState extends State<_HomeTabContent> {
               return GestureDetector(
                 onTap: () async {
                   HapticFeedback.selectionClick();
-                  final songs = await _repository.getPlaylistSongs(playlist.id);
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Loading ${playlist.name}...', style: GoogleFonts.plusJakartaSans(color: Colors.white)), backgroundColor: SpotifyColors.surfaceElevated, duration: const Duration(seconds: 1))
+                  );
+
+                  List<Song> songs = await _repository.getPlaylistSongs(playlist.id);
+                  
+                  if (songs.isEmpty) {
+                    songs = await _repository.search(playlist.name, pages: 1);
+                  }
+
                   if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                  if (songs.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Content is unavailable right now.', style: GoogleFonts.plusJakartaSans(color: Colors.white)), backgroundColor: SpotifyColors.surfaceElevated));
+                    return;
+                  }
+
                   Navigator.push(context, MaterialPageRoute(builder: (_) => PlaylistScreen(playlistName: playlist.name, subtitle: playlist.subtitle, icon: Icons.playlist_play_rounded, songs: songs)));
                 },
                 child: SizedBox(
@@ -716,7 +748,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                         child: AspectRatio(
                           aspectRatio: 1,
                           child: playlist.image.isNotEmpty
-                              ? Image.network(playlist.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.album_rounded, color: SpotifyColors.textSecondary, size: 40)))
+                              ? Image.network(playlist.image, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.album_rounded, color: SpotifyColors.textSecondary, size: 40)))
                               : Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.album_rounded, color: SpotifyColors.textSecondary, size: 40)),
                         ),
                       ),
@@ -763,12 +795,11 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                         child: AspectRatio(
                           aspectRatio: 1,
                           child: song.thumbnail.isNotEmpty
-                              ? Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary)))
+                              ? Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary)))
                               : Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary)),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      // FIX: ADDED 3-DOT MENU FOR RECENTLY PLAYED
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -827,8 +858,25 @@ class _HomeTabContentState extends State<_HomeTabContent> {
               return GestureDetector(
                 onTap: () async {
                   HapticFeedback.selectionClick();
-                  final songs = await _repository.getAlbumSongs(album.id);
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Loading ${album.name}...', style: GoogleFonts.plusJakartaSans(color: Colors.white)), backgroundColor: SpotifyColors.surfaceElevated, duration: const Duration(seconds: 1))
+                  );
+
+                  List<Song> songs = await _repository.getAlbumSongs(album.id);
+
+                  if (songs.isEmpty) {
+                    songs = await _repository.search(album.name, pages: 1);
+                  }
+
                   if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                  if (songs.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Content is unavailable right now.', style: GoogleFonts.plusJakartaSans(color: Colors.white)), backgroundColor: SpotifyColors.surfaceElevated));
+                    return;
+                  }
+
                   Navigator.push(context, MaterialPageRoute(builder: (_) => PlaylistScreen(playlistName: album.name, subtitle: album.artist, icon: Icons.album_rounded, songs: songs)));
                 },
                 child: SizedBox(
@@ -841,13 +889,118 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                         child: AspectRatio(
                           aspectRatio: 1,
                           child: album.image.isNotEmpty
-                              ? Image.network(album.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.album_rounded, color: SpotifyColors.textSecondary)))
+                              ? Image.network(album.image, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.album_rounded, color: SpotifyColors.textSecondary)))
                               : Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.album_rounded, color: SpotifyColors.textSecondary)),
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(decodeHtml(album.name), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
                       Text(decodeHtml(album.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildSimpleSection(String title, List<Map<String, String>> items, Color accentColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(title, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+        ),
+        SizedBox(
+          height: 190,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16), scrollDirection: Axis.horizontal, itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final type = item['type'] ?? '';
+              
+              IconData typeIcon = Icons.explore_rounded;
+              if (type == 'show' || type == 'podcast') typeIcon = Icons.podcasts_rounded;
+              else if (type == 'album') typeIcon = Icons.album_rounded;
+              else if (type == 'playlist' || type == 'mix') typeIcon = Icons.queue_music_rounded;
+
+              return GestureDetector(
+                onTap: () async {
+                  HapticFeedback.selectionClick();
+                  final id = item['id']!;
+                  final itemTitle = item['title'] ?? 'Playlist';
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Loading $itemTitle...', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+                      backgroundColor: SpotifyColors.surfaceElevated,
+                      duration: const Duration(seconds: 1),
+                    )
+                  );
+
+                  try {
+                    List<Song> songs = [];
+                    if (type == 'album') {
+                      songs = await _repository.getAlbumSongs(id);
+                    } else {
+                      songs = await _repository.getPlaylistSongs(id);
+                    }
+
+                    if (songs.isEmpty) {
+                       songs = await _repository.search(itemTitle, pages: 1);
+                    }
+
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                    if (songs.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Content is unavailable right now.', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+                          backgroundColor: SpotifyColors.surfaceElevated,
+                        )
+                      );
+                      return;
+                    }
+
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => PlaylistScreen(
+                      playlistName: itemTitle, subtitle: item['subtitle'] ?? 'Mix', 
+                      icon: typeIcon, songs: songs
+                    )));
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Unable to load this content type right now.', style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+                        backgroundColor: SpotifyColors.surfaceElevated,
+                      )
+                    );
+                  }
+                },
+                child: SizedBox(
+                  width: 130,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: item['image']!.isNotEmpty
+                              ? Image.network(item['image']!, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceElevated, child: Icon(typeIcon, color: SpotifyColors.textSecondary)))
+                              : Container(color: SpotifyColors.surfaceElevated, child: Icon(typeIcon, color: SpotifyColors.textSecondary)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(decodeHtml(item['title']!), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+                      Text(decodeHtml(item['subtitle']!), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.plusJakartaSans(color: SpotifyColors.textSecondary, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -887,7 +1040,7 @@ class _HomeTabContentState extends State<_HomeTabContent> {
                         child: AspectRatio(
                           aspectRatio: 1,
                           child: song.thumbnail.isNotEmpty
-                              ? Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 40)))
+                              ? Image.network(song.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 40)))
                               : Container(color: SpotifyColors.surfaceElevated, child: const Icon(Icons.music_note_rounded, color: SpotifyColors.textSecondary, size: 40)),
                         ),
                       ),

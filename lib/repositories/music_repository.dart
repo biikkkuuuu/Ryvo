@@ -1,5 +1,4 @@
 import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:music_app/models/song.dart';
 import 'package:music_app/services/jiosaavn_service.dart';
@@ -10,19 +9,12 @@ class SearchArtistResult {
   final String name;
   final String role;
   final String image;
-
-  const SearchArtistResult({
-    required this.id,
-    required this.name,
-    required this.role,
-    required this.image,
-  });
+  const SearchArtistResult({required this.id, required this.name, required this.role, required this.image});
 }
 
 class ArtistSongsPage {
   final List<Song> songs;
   final int? total;
-
   const ArtistSongsPage({required this.songs, required this.total});
 }
 
@@ -32,14 +24,7 @@ class SearchPlaylistResult {
   final String subtitle;
   final String image;
   final int? songCount;
-
-  const SearchPlaylistResult({
-    required this.id,
-    required this.name,
-    required this.subtitle,
-    required this.image,
-    required this.songCount,
-  });
+  const SearchPlaylistResult({required this.id, required this.name, required this.subtitle, required this.image, required this.songCount});
 }
 
 class SearchAlbumResult {
@@ -48,14 +33,7 @@ class SearchAlbumResult {
   final String artist;
   final String image;
   final int? songCount;
-
-  const SearchAlbumResult({
-    required this.id,
-    required this.name,
-    required this.artist,
-    required this.image,
-    required this.songCount,
-  });
+  const SearchAlbumResult({required this.id, required this.name, required this.artist, required this.image, required this.songCount});
 }
 
 class SearchResult {
@@ -63,20 +41,8 @@ class SearchResult {
   final List<SearchAlbumResult> albums;
   final List<SearchPlaylistResult> playlists;
   final List<SearchArtistResult> artists;
-
-  const SearchResult({
-    required this.songs,
-    required this.albums,
-    required this.playlists,
-    required this.artists,
-  });
-
-  bool get isEmpty {
-    return songs.isEmpty &&
-        albums.isEmpty &&
-        playlists.isEmpty &&
-        artists.isEmpty;
-  }
+  const SearchResult({required this.songs, required this.albums, required this.playlists, required this.artists});
+  bool get isEmpty => songs.isEmpty && albums.isEmpty && playlists.isEmpty && artists.isEmpty;
 }
 
 class MusicRepository {
@@ -85,22 +51,18 @@ class MusicRepository {
   static const int _songsPerSection = 8;
   static const int _historyLimit = 160;
   static const int _apiPageLimit = 20;
-  static const int _pagesPerQuery = 3;
 
   final Random _random = Random();
 
   Future<List<Song>> search(String query, {int pages = 1}) async {
     final value = query.trim();
     if (value.isEmpty) return [];
-
     final safePages = pages.clamp(1, 5);
 
     try {
       final artists = await artistSuggestions(value);
       final normalizedQuery = _normaliseArtistName(value);
-      final exactArtist = artists.where(
-        (artist) => _normaliseArtistName(artist.name) == normalizedQuery,
-      );
+      final exactArtist = artists.where((artist) => _normaliseArtistName(artist.name) == normalizedQuery);
 
       final artist = exactArtist.isNotEmpty ? exactArtist.first : null;
       if (artist != null && artist.id.trim().isNotEmpty) {
@@ -117,33 +79,23 @@ class MusicRepository {
         for (final result in pagesResult) {
           for (final song in result.songs) {
             if (song.id.trim().isEmpty || !ids.add(song.id)) continue;
-
             final title = _normaliseTitle(song.title);
             if (title.isNotEmpty && !titles.add(title)) continue;
-
             songs.add(song);
           }
         }
-
         return songs;
       }
     } catch (_) {}
 
     final requests = <Future<List<dynamic>>>[];
-
     for (int page = 0; page < safePages; page++) {
-      requests.add(
-        _service.searchSongs(value, page: page, limit: _apiPageLimit),
-      );
+      requests.add(_service.searchSongs(value, page: page, limit: _apiPageLimit));
     }
 
     final responses = await Future.wait(
       requests.map((request) async {
-        try {
-          return await request;
-        } catch (_) {
-          return <dynamic>[];
-        }
+        try { return await request; } catch (_) { return <dynamic>[]; }
       }),
     );
 
@@ -160,7 +112,6 @@ class MusicRepository {
         songs.add(song);
       }
     }
-
     return songs;
   }
 
@@ -185,16 +136,12 @@ class MusicRepository {
         output.add(song);
         if (output.length >= 6) break;
       }
-
       return output;
-    } catch (_) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   Future<List<Song>> getSongRecommendations(Song currentSong, {List<String> excludeIds = const []}) async {
     final artistName = currentSong.artist.trim();
-    
     if (artistName.isEmpty || artistName.toLowerCase() == 'unknown' || artistName.toLowerCase() == 'unknown artist') {
       final fallback = await songSuggestions(currentSong.title);
       return fallback.where((s) => s.id != currentSong.id && !excludeIds.contains(s.id)).toList();
@@ -203,13 +150,9 @@ class MusicRepository {
     try {
       final artists = await artistSuggestions(artistName);
       final normalizedQuery = _normaliseArtistName(artistName);
-      
-      final exactArtist = artists.where(
-        (artist) => _normaliseArtistName(artist.name) == normalizedQuery,
-      ).firstOrNull ?? (artists.isNotEmpty ? artists.first : null);
+      final exactArtist = artists.where((artist) => _normaliseArtistName(artist.name) == normalizedQuery).firstOrNull ?? (artists.isNotEmpty ? artists.first : null);
 
       List<Song> candidates = [];
-
       if (exactArtist != null) {
         final artistSongs = await getArtistSongsPage(exactArtist.id, page: 0);
         candidates = artistSongs.songs;
@@ -229,9 +172,7 @@ class MusicRepository {
       if (filtered.length < 5) {
         final extra = await songSuggestions(currentSong.title);
         for (final song in extra) {
-            if (uniqueIds.add(song.id)) {
-              filtered.add(song);
-            }
+            if (uniqueIds.add(song.id)) filtered.add(song);
         }
       }
 
@@ -245,32 +186,23 @@ class MusicRepository {
 
   Future<List<SearchArtistResult>> artistSuggestions(String query) async {
     if (query.trim().isEmpty) return [];
-
     try {
       final raw = await _service.searchArtists(query.trim(), page: 0, limit: 5);
       return raw.map(_convertArtist).whereType<SearchArtistResult>().take(5).toList();
-    } catch (_) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   Future<List<SearchPlaylistResult>> playlistSuggestions(String query) async {
     if (query.trim().isEmpty) return [];
-
     try {
       final raw = await _service.searchPlaylists(query.trim(), page: 0, limit: 5);
       return raw.map(_convertPlaylist).whereType<SearchPlaylistResult>().take(5).toList();
-    } catch (_) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   Future<SearchResult> globalSearch(String query) async {
     final data = await _service.globalSearch(query.trim());
-
-    if (data is! Map) {
-      return const SearchResult(songs: [], albums: [], playlists: [], artists: []);
-    }
+    if (data is! Map) return const SearchResult(songs: [], albums: [], playlists: [], artists: []);
 
     return SearchResult(
       songs: _songsFromGlobal(data),
@@ -284,10 +216,7 @@ class MusicRepository {
     final id = artistId.trim();
     if (id.isEmpty) return const ArtistSongsPage(songs: [], total: null);
 
-    final data = await _service.getArtistSongs(
-      id, page: page, sortBy: 'popularity', sortOrder: 'desc',
-    );
-
+    final data = await _service.getArtistSongs(id, page: page, sortBy: 'popularity', sortOrder: 'desc');
     if (data is! Map) return const ArtistSongsPage(songs: [], total: null);
 
     final rawSongs = data['songs'];
@@ -327,14 +256,10 @@ class MusicRepository {
       final albumData = await _service.getAlbum(albumId.trim());
       if (albumData is Map) {
         final rawSongs = albumData['songs'] ?? albumData['list'];
-        if (rawSongs is List) {
-          return _convertToSongs(rawSongs.whereType<Map>().toList());
-        }
+        if (rawSongs is List) return _convertToSongs(rawSongs.whereType<Map>().toList());
       }
       return [];
-    } catch (_) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   Future<List<dynamic>> getRadioStations(List<String> songIds) async {
@@ -346,21 +271,42 @@ class MusicRepository {
     }
   }
 
-  Future<Map<String, List<Song>>> getHomeSections() async {
-    try {
-      final bundle = await getHomeBundle();
-      final raw = bundle['sections'];
-      if (raw is Map) {
-        return raw.map<String, List<Song>>((key, value) {
-          if (value is List<Song>) return MapEntry(key.toString(), value);
-          return MapEntry(key.toString(), <Song>[]);
-        });
+  Future<List<Song>> _resolveHomeModuleSongsRaw(dynamic value) async {
+    if (value is! List) return [];
+
+    final output = <Song>[];
+    final processedAlbums = <String>{};
+
+    for (final item in value.whereType<Map>()) {
+      final type = item['type']?.toString().trim().toLowerCase() ?? '';
+
+      if (type == 'song') {
+        output.addAll(_convertToSongs([item]));
+        if (output.length >= 25) break;
+        continue;
       }
-      return {};
-    } catch (e) {
-      debugPrint('RYVO HOME SECTIONS ERROR: $e');
-      return {};
+
+      final albumId = item['id']?.toString().trim() ?? '';
+      if (albumId.isNotEmpty && (type == 'album' || type == 'compilation' || type.isEmpty)) {
+        if (!processedAlbums.add(albumId)) continue;
+        try {
+          final albumData = await _service.getAlbum(albumId);
+          dynamic rawSongs;
+          if (albumData is Map) {
+            rawSongs = albumData['songs'];
+            if (rawSongs is! List) rawSongs = albumData['list'];
+          }
+          if (rawSongs is List) {
+            output.addAll(_convertToSongs(rawSongs.whereType<Map>().toList()));
+          }
+        } catch (e) {
+          debugPrint('RYVO HOME album fetch failed [$albumId]: $e');
+        }
+      }
+      if (output.length >= 25) break;
     }
+
+    return _uniqueSongs(output);
   }
 
   Future<Map<String, dynamic>> getHomeBundle() async {
@@ -368,10 +314,48 @@ class MusicRepository {
       final homeData = await _service.getHome();
       if (homeData is! Map) throw Exception('Invalid Home response');
 
-      final newlyReleased = await _resolveHomeModuleSongs(homeData['newReleases'], sectionName: 'Newly Released');
-      final trending = await _resolveHomeModuleSongs(homeData['newTrending'], sectionName: 'Trending');
-      final charts = await _resolveHomeModuleSongs(homeData['charts'], sectionName: 'Charts');
-      final personalized = await _getPersonalizedSongs();
+      final rawResults = await Future.wait([
+        _resolveHomeModuleSongsRaw(homeData['newReleases']),
+        _resolveHomeModuleSongsRaw(homeData['newTrending']),
+        _resolveHomeModuleSongsRaw(homeData['charts']),
+        _getPersonalizedSongs(), 
+      ]);
+
+      final newlyReleasedCandidates = rawResults[0];
+      final trendingCandidates = rawResults[1];
+      final chartsCandidates = rawResults[2];
+      final personalized = rawResults[3];
+
+      final Set<String> globalSeenIds = {};
+
+      List<Song> smartDedupe(List<Song> candidates, int targetLimit) {
+        final unique = <Song>[];
+        final duplicates = <Song>[];
+
+        for (final song in candidates) {
+          if (globalSeenIds.contains(song.id)) {
+            duplicates.add(song);
+          } else {
+            unique.add(song);
+            globalSeenIds.add(song.id);
+          }
+          if (unique.length >= targetLimit) break;
+        }
+
+        if (unique.length < targetLimit) {
+          for (final dup in duplicates) {
+            if (!unique.any((s) => s.id == dup.id)) {
+              unique.add(dup);
+              if (unique.length >= targetLimit) break;
+            }
+          }
+        }
+        return unique;
+      }
+
+      final newlyReleased = smartDedupe(newlyReleasedCandidates, 12);
+      final trending = smartDedupe(trendingCandidates, 14);
+      final charts = smartDedupe(chartsCandidates, 10);
 
       List<SearchPlaylistResult> parsePlaylists(dynamic value) {
         if (value is! List) return [];
@@ -386,32 +370,28 @@ class MusicRepository {
       List<Map<String, String>> parseSimple(dynamic value) {
         if (value is! List) return [];
         return value.whereType<Map>().map((item) {
-              final moreInfo = item['more_info'];
-              final info = moreInfo is Map ? moreInfo : const {};
-              return <String, String>{
-                'id': item['id']?.toString() ?? '',
-                'title': item['title']?.toString() ?? item['name']?.toString() ?? '',
-                'subtitle': item['subtitle']?.toString() ?? '',
-                'type': item['type']?.toString() ?? '',
-                'image': item['image']?.toString() ?? '',
-                'permaUrl': item['perma_url']?.toString() ?? '',
-                'squareImage': info['square_image']?.toString() ?? '',
-                'season': info['season_number']?.toString() ?? '',
-                'badge': info['badge']?.toString() ?? '',
-              };
-            }).where((item) => item['title']!.trim().isNotEmpty).toList();
+          final moreInfo = item['more_info'];
+          final info = moreInfo is Map ? moreInfo : const {};
+          return <String, String>{
+            'id': item['id']?.toString() ?? '',
+            'title': item['title']?.toString() ?? item['name']?.toString() ?? '',
+            'subtitle': item['subtitle']?.toString() ?? '',
+            'type': item['type']?.toString() ?? '',
+            'image': _extractImage(item),
+          };
+        }).where((item) => item['title']!.trim().isNotEmpty).toList();
       }
 
       return <String, dynamic>{
         'sections': <String, List<Song>>{
           if (personalized.isNotEmpty) 'Made For You': personalized,
-          'Newly Released': newlyReleased,
-          'Trending': trending,
-          'Charts': charts,
+          if (newlyReleased.isNotEmpty) 'Newly Released': newlyReleased,
+          if (trending.isNotEmpty) 'Trending': trending,
+          if (charts.isNotEmpty) 'Charts': charts,
         },
         'playlists': parsePlaylists(homeData['topPlaylists']),
-        'discover': parseSimple(homeData['browseDiscover']),
         'albums': parseAlbums(homeData['newAlbums']),
+        'discover': parseSimple(homeData['browseDiscover']),
         'shows': parseSimple(homeData['topShows']),
       };
     } catch (e) {
@@ -442,9 +422,7 @@ class MusicRepository {
               if (id.isNotEmpty && ids.add(id)) candidates.add(song);
             }
           }
-        } catch (e) {
-          debugPrint('RYVO PERSONALIZED ARTIST ERROR: $e');
-        }
+        } catch (e) { debugPrint('RYVO PERSONALIZED ARTIST ERROR: $e'); }
       }
 
       for (final genre in genres.take(4)) {
@@ -454,68 +432,16 @@ class MusicRepository {
             final id = song.id.trim();
             if (id.isNotEmpty && ids.add(id)) candidates.add(song);
           }
-        } catch (e) {
-          debugPrint('RYVO PERSONALIZED GENRE ERROR: $e');
-        }
+        } catch (e) { debugPrint('RYVO PERSONALIZED GENRE ERROR: $e'); }
       }
 
       if (candidates.isEmpty) return <Song>[];
-
       final finalSongs = await _selectFreshSongs(sectionName: 'Made For You', candidates: candidates);
       return finalSongs;
     } catch (e) {
       debugPrint('RYVO PERSONALIZED ERROR: $e');
       return <Song>[];
     }
-  }
-
-  Future<List<Song>> _resolveHomeModuleSongs(dynamic value, {required String sectionName}) async {
-    if (value is! List) return [];
-
-    final output = <Song>[];
-    final ids = <String>{};
-    final processedAlbums = <String>{};
-
-    void addSongs(List<Song> songs) {
-      for (final song in songs) {
-        final id = song.id.trim();
-        if (id.isEmpty || !ids.add(id)) continue;
-        output.add(song);
-        if (output.length >= _songsPerSection) break;
-      }
-    }
-
-    for (final item in value.whereType<Map>()) {
-      final type = item['type']?.toString().trim().toLowerCase() ?? '';
-
-      if (type == 'song') {
-        addSongs(_convertToSongs([item]));
-        if (output.length >= _songsPerSection) break;
-        continue;
-      }
-
-      final albumId = item['id']?.toString().trim() ?? '';
-      if (albumId.isNotEmpty && (type == 'album' || type == 'compilation' || type.isEmpty)) {
-        if (!processedAlbums.add(albumId)) continue;
-        try {
-          final albumData = await _service.getAlbum(albumId);
-          dynamic rawSongs;
-          if (albumData is Map) {
-            rawSongs = albumData['songs'];
-            if (rawSongs is! List) rawSongs = albumData['list'];
-          }
-          if (rawSongs is List) {
-            addSongs(_convertToSongs(rawSongs.whereType<Map>().toList()));
-          }
-        } catch (e) {
-          debugPrint('RYVO HOME $sectionName album fetch failed [$albumId]: $e');
-        }
-      }
-
-      if (output.length >= _songsPerSection) break;
-    }
-
-    return _uniqueSongs(output).take(_songsPerSection).toList();
   }
 
   Future<List<Song>> _selectFreshSongs({required String sectionName, required List<Song> candidates}) async {
@@ -544,16 +470,14 @@ class MusicRepository {
     if (selected.length < _songsPerSection) {
       for (final song in fresh) {
         if (selected.length >= _songsPerSection) break;
-        if (_containsSong(selected, song)) continue;
-        selected.add(song);
+        if (!_containsSong(selected, song)) selected.add(song);
       }
     }
 
     if (selected.length < _songsPerSection) {
       for (final song in shuffled) {
         if (selected.length >= _songsPerSection) break;
-        if (_containsSong(selected, song)) continue;
-        selected.add(song);
+        if (!_containsSong(selected, song)) selected.add(song);
       }
     }
 
@@ -607,10 +531,8 @@ class MusicRepository {
 
   List<Song> _convertToSongs(dynamic results) {
     if (results is! List) return [];
-
     return results.map<Song?>((item) {
       if (item is! Map) return null;
-
       final id = item['id']?.toString() ?? '';
       final title = item['name']?.toString() ?? item['title']?.toString() ?? '';
 
@@ -631,16 +553,10 @@ class MusicRepository {
       final images = item['image'];
       if (images is List && images.isNotEmpty) {
         final last = images.last;
-        if (last is Map) {
-          image = last['url']?.toString() ?? '';
-        } else if (last is String) {
-          image = last;
-        }
-      } else if (images is String) {
-        image = images;
-      }
+        if (last is Map) { image = last['url']?.toString() ?? ''; } 
+        else if (last is String) { image = last; }
+      } else if (images is String) { image = images; }
 
-      // EXTRACT DOWNLOAD URL
       final urls = item['downloadUrl'];
       if (urls is List && urls.isNotEmpty) {
         for (final u in urls) {
@@ -674,11 +590,7 @@ class MusicRepository {
     if (id.isEmpty || name.isEmpty) return null;
     int? count;
     final rawCount = item['songCount'] ?? item['song_count'] ?? item['numsongs'];
-    if (rawCount is int) {
-      count = rawCount;
-    } else if (rawCount != null) {
-      count = int.tryParse(rawCount.toString());
-    }
+    if (rawCount is int) { count = rawCount; } else if (rawCount != null) { count = int.tryParse(rawCount.toString()); }
     return SearchPlaylistResult(id: id, name: name, subtitle: item['subtitle']?.toString() ?? item['description']?.toString() ?? 'Playlist', image: _extractImage(item), songCount: count);
   }
 
@@ -689,11 +601,7 @@ class MusicRepository {
     if (id.isEmpty || name.isEmpty) return null;
     int? count;
     final rawCount = item['songCount'] ?? item['song_count'] ?? item['numsongs'];
-    if (rawCount is int) {
-      count = rawCount;
-    } else if (rawCount != null) {
-      count = int.tryParse(rawCount.toString());
-    }
+    if (rawCount is int) { count = rawCount; } else if (rawCount != null) { count = int.tryParse(rawCount.toString()); }
     return SearchAlbumResult(id: id, name: name, artist: item['subtitle']?.toString() ?? item['artist']?.toString() ?? 'Album', image: _extractImage(item), songCount: count);
   }
 
@@ -702,12 +610,6 @@ class MusicRepository {
     if (image is String) return image;
     if (image is List && image.isNotEmpty) {
       final last = image.last;
-      if (last is String) return last;
-      if (last is Map) return last['url']?.toString() ?? '';
-    }
-    final images = item['images'];
-    if (images is List && images.isNotEmpty) {
-      final last = images.last;
       if (last is String) return last;
       if (last is Map) return last['url']?.toString() ?? '';
     }

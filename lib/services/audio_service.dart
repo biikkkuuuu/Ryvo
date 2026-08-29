@@ -32,6 +32,9 @@ class AudioService {
 
   final ValueNotifier<List<Song>> queue =
       ValueNotifier<List<Song>>(<Song>[]);
+      
+  final ValueNotifier<List<Song>> history =
+      ValueNotifier<List<Song>>(<Song>[]);
 
   bool _loadingNext = false;
   bool _completionHandled = false;
@@ -39,7 +42,7 @@ class AudioService {
   DateTime? _lastSaveTime;
 
   // ============================================================
-  // LAST PLAYED SONG PERSISTENCE
+  // PERSISTENCE (SONG + QUEUE)
   // ============================================================
 
   Future<void> _saveLastSong(Song song) async {
@@ -59,6 +62,18 @@ class AudioService {
       debugPrint('RYVO: Last song saved -> ${song.title}');
     } catch (e) {
       debugPrint('RYVO: Failed to save last song -> $e');
+    }
+  }
+  
+  Future<void> _saveQueue() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final qData = queue.value.map((s) => jsonEncode({'id': s.id, 'title': s.title, 'artist': s.artist, 'thumbnail': s.thumbnail})).toList();
+      final hData = history.value.map((s) => jsonEncode({'id': s.id, 'title': s.title, 'artist': s.artist, 'thumbnail': s.thumbnail})).toList();
+      await prefs.setStringList('ryvo_queue', qData);
+      await prefs.setStringList('ryvo_history', hData);
+    } catch(e) {
+       debugPrint('RYVO: Failed to save queue -> $e');
     }
   }
 
@@ -88,6 +103,23 @@ class AudioService {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      // Restore Queue and History
+      final qList = prefs.getStringList('ryvo_queue') ?? [];
+      final hList = prefs.getStringList('ryvo_history') ?? [];
+      
+      Song mapToSong(String jsonStr) {
+        final m = jsonDecode(jsonStr);
+        return Song(
+          id: m['id']?.toString() ?? '',
+          title: m['title']?.toString() ?? 'Unknown',
+          artist: m['artist']?.toString() ?? 'Unknown',
+          thumbnail: m['thumbnail']?.toString() ?? '',
+        );
+      }
+      
+      queue.value = qList.map(mapToSong).where((s) => s.id.isNotEmpty).toList();
+      history.value = hList.map(mapToSong).where((s) => s.id.isNotEmpty).toList();
+
       final saved = prefs.getString(_lastSongKey);
       if (saved == null || saved.trim().isEmpty) return;
 
@@ -109,7 +141,7 @@ class AudioService {
       final savedPos = prefs.getInt('ryvo_last_position') ?? 0;
       final wasPlaying = prefs.getBool('ryvo_was_playing') ?? false;
 
-      debugPrint('RYVO: Restored last song UI -> ${song.title}');
+      debugPrint('RYVO: Restored last song UI -> ${song.title} | Queue: ${queue.value.length}');
 
       String audioUrl = '';
       bool isOffline = false;
@@ -181,10 +213,14 @@ class AudioService {
       await prefs.remove(_lastSongKey);
       await prefs.remove('ryvo_last_position');
       await prefs.remove('ryvo_was_playing');
+      await prefs.remove('ryvo_queue');
+      await prefs.remove('ryvo_history');
 
       currentSong.value = null;
+      queue.value = [];
+      history.value = [];
 
-      debugPrint('RYVO: Last song cleared');
+      debugPrint('RYVO: Last song & queue cleared');
     } catch (e) {
       debugPrint('RYVO: Failed to clear last song -> $e');
     }
@@ -360,16 +396,18 @@ class AudioService {
   }) {
     if (songs.isEmpty) {
       queue.value = <Song>[];
+      history.value = <Song>[];
+      _saveQueue();
       return;
     }
 
     final safeIndex = currentIndex.clamp(0, songs.length - 1);
+    
+    history.value = songs.take(safeIndex).toList();
+    queue.value = songs.skip(safeIndex + 1).toList();
+    _saveQueue();
 
-    final remaining = songs.skip(safeIndex + 1).toList();
-
-    queue.value = List<Song>.from(remaining);
-
-    debugPrint('RYVO: Playback queue set (${queue.value.length} songs)');
+    debugPrint('RYVO: Playback queue set (${queue.value.length} up next)');
   }
 
   void addToQueue(Song song) {
@@ -384,6 +422,7 @@ class AudioService {
 
     updated.add(song);
     queue.value = updated;
+    _saveQueue();
     debugPrint('Added to queue: ${song.title}');
   }
 
@@ -395,6 +434,7 @@ class AudioService {
     updated.insert(0, song);
 
     queue.value = updated;
+    _saveQueue();
     debugPrint('Play next: ${song.title}');
   }
 
@@ -402,14 +442,17 @@ class AudioService {
     final updated = List<Song>.from(queue.value);
     updated.removeWhere((item) => item.id == song.id);
     queue.value = updated;
+    _saveQueue();
   }
 
   void clearQueueItems() {
     queue.value = <Song>[];
+    history.value = <Song>[];
+    _saveQueue();
   }
 
   // ============================================================
-  // NEXT SONG
+  // NEXT & PREVIOUS
   // ============================================================
 
   Future<void> skipToNext() async {
@@ -424,9 +467,15 @@ class AudioService {
 
     try {
       final nextSong = queue.value.first;
-      final remaining = List<Song>.from(queue.value);
-      remaining.removeAt(0);
+      final remaining = List<Song>.from(queue.value)..removeAt(0);
+      
+      if (currentSong.value != null) {
+        final newHistory = List<Song>.from(history.value)..add(currentSong.value!);
+        history.value = newHistory;
+      }
+
       queue.value = remaining;
+      _saveQueue();
 
       debugPrint('RYVO: Auto-next -> ${nextSong.title}');
 
@@ -434,6 +483,35 @@ class AudioService {
     } catch (e, stackTrace) {
       debugPrint('RYVO: Queue playback error: $e');
       debugPrint('$stackTrace');
+    } finally {
+      _loadingNext = false;
+    }
+  }
+  
+  Future<void> skipToPrevious() async {
+    if (history.value.isEmpty) {
+      await player.seek(Duration.zero);
+      return;
+    }
+    
+    _loadingNext = true;
+    try {
+      final prevSong = history.value.last;
+      final newHistory = List<Song>.from(history.value)..removeLast();
+      
+      if (currentSong.value != null) {
+        final newQueue = List<Song>.from(queue.value);
+        newQueue.insert(0, currentSong.value!);
+        queue.value = newQueue;
+      }
+      
+      history.value = newHistory;
+      _saveQueue();
+      
+      debugPrint('RYVO: Auto-prev -> ${prevSong.title}');
+      await _playSong(prevSong);
+    } catch (e) {
+      debugPrint('RYVO: Queue prev error: $e');
     } finally {
       _loadingNext = false;
     }
